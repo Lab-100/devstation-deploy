@@ -1,0 +1,16 @@
+models:
+  local:
+    provider: dmr
+    model: ai/smollm2
+    max_tokens: 2048
+    provider_opts:
+      context_size: 4096
+      runtime_flags: ["--threads", "6"]
+      keep_alive: "5m"
+agents:
+  root:
+    model: local
+    description: Gordon (Docker Agent) - локальный бесплатный ИИ
+    instruction: |
+      Ты - полезный ассистент. Отвечай кратко и по делу.
+    toolsets: []

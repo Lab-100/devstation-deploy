@@ -1,0 +1,28 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "ollama": {
+      "type": "provider",
+      "baseUrl": "http://localhost:11434/v1",
+      "models": {
+        "8b": { "name": "Hermes 3 8B", "model": "hermes3:8b" },
+        "3b": { "name": "Hermes 3 3B", "model": "hermes3:3b" },
+        "3b-cpu": { "name": "Hermes 3 3B CPU", "model": "hermes3:3b-cpu" }
+      },
+      "options": { "model": "hermes3:3b" }
+    }
+  },
+  "mcp": {
+    "local-llm": {
+      "type": "local",
+      "command": ["__PYTHON__/python.exe", "__LLM_SERVER__/llm_mcp_server.py"],
+      "enabled": true
+    },
+    "firecrawl-mcp": {
+      "type": "local",
+      "command": ["npx", "-y", "firecrawl-mcp"],
+      "environment": { "FIRECRAWL_API_KEY": "{env:FIRECRAWL_API_KEY}" },
+      "enabled": true
+    }
+  }
+}
