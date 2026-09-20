@@ -1,0 +1,15 @@
+{
+  "schema": "inrv.project/1",
+  "name": "devstation-deploy",
+  "mode": "dist",
+  "tools": {
+    "backup-util": "0.1.x",
+    "gordon": "0.1.x",
+    "firecrawl-key": "0.1.x",
+    "vmdisk": "0.1.x",
+    "llm-mcp": "0.1.x"
+  },
+  "links": {
+    "dir": "tools"
+  }
+}

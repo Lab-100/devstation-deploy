@@ -20,14 +20,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-# Каталог бэкапов НЕ на системном диске (политика), версионируется в GitHub.
-# Корень читается из файла rollback-root.txt рядом со скриптом (задаётся deploy.ps1).
+# Каталог бэкапов НЕ на системном диске (политика: E:\), версионируется в GitHub.
 $root = 'E:\rollback-catalog'
-$rootFile = Join-Path $PSScriptRoot 'rollback-root.txt'
-if (Test-Path $rootFile) {
-    $candidate = (Get-Content $rootFile -TotalCount 1).Trim()
-    if ($candidate) { $root = $candidate }
-}
 $changesDir = Join-Path $root 'changes'
 $manifestPath = Join-Path $root 'manifest.json'
 $readmePath = Join-Path $root 'README.md'
