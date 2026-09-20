@@ -5,7 +5,7 @@ function Deploy-Rollback($Ctx) {
         $drive = if ($Ctx.OllamaModelsDir) { Split-Path (Split-Path $Ctx.OllamaModelsDir -Parent) -Qualifier } else { $Ctx.DataDrive }
         if (-not $drive -or $drive -eq 'C:') {
             $best = Get-BestDataDrive
-            if ($best) { $drive = $best } else { $drive = 'E:' }
+            $drive = if ($best) { $best } else { Split-Path $Ctx.WorkspaceDir -Qualifier }
         }
         $Ctx.RollbackRoot = "$drive\rollback-catalog"
     }
