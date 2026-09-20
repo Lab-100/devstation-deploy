@@ -54,7 +54,7 @@ function Save-State($Ctx) {
         owner = $Ctx.Owner
         pullQwen3 = $Ctx.PullQwen3
         setupGitHub = $Ctx.SetupGitHub
-        done = @($Ctx.Done | Sort-Object -Unique)
+        done = @( @($Ctx.Done | Sort-Object -Unique | Where-Object { $_ }) | ForEach-Object { [string]$_ } )
         rebootRequired = $Ctx.RebootRequired
         updatedAt = (Get-Date -Format o)
     } | ConvertTo-Json -Depth 5 | Set-Content -Path (Get-StatePath) -Encoding utf8
@@ -74,14 +74,17 @@ function Load-State([hashtable]$DefaultCtx) {
     $DefaultCtx.Owner = if ($s.owner) { $s.owner } else { $DefaultCtx.Owner }
     $DefaultCtx.PullQwen3 = if ($null -ne $s.pullQwen3) { [bool]$s.pullQwen3 } else { $DefaultCtx.PullQwen3 }
     $DefaultCtx.SetupGitHub = if ($null -ne $s.setupGitHub) { [bool]$s.setupGitHub } else { $DefaultCtx.SetupGitHub }
-    $DefaultCtx.Done = @($s.done)
+    $DefaultCtx.Done = @( @($s.done) | Where-Object { $_ } | ForEach-Object { [string]$_ } )
     if ($s.rebootRequired) { $DefaultCtx.RebootRequired = $true }
     return $DefaultCtx
 }
 
 function Set-StageDone($Ctx, [string]$Stage, [hashtable]$State, [bool]$DoSave = $true) {
-    if ($State.done -notcontains $Stage) { $State.done += $Stage }
-    $Ctx.Done = $State.done
+    $list = @($State.done) | Where-Object { $_ -and ($_ -ne $Stage) }
+    $list = @($list)
+    $list += $Stage
+    $State.done = $list
+    $Ctx.Done = @($list)
     if ($DoSave) { Save-State $Ctx }
 }
 
