@@ -1,3 +1,13 @@
+function Test-WingetUsable {
+    # Настоящий запуск winget может быть запрещён (битый App Execution Alias репака Images).
+    # Проверяем ПРАКТИЧЕСКИЙ запуск, глуша любые ошибки старта.
+    if (-not (Test-Command winget)) { return $false }
+    try {
+        & winget --version *> $null
+        return ($LASTEXITCODE -eq 0)
+    } catch { return $false }
+}
+
 function Install-App {
     param(
         [hashtable]$App,
@@ -16,18 +26,24 @@ function Install-App {
 
     if ($UseWinget) {
         Write-Note "winget install $($App.Id) ..."
-        winget install --id $App.Id --exact --silent --accept-package-agreements --accept-source-agreements
-        if ($LASTEXITCODE -eq 0) { Write-OK "$($App.Id): установлено"; return }
-        Write-Warn "$($App.Id): winget вернул $LASTEXITCODE — пробую прямой загрузчик"
+        $rc = 1
+        try { winget install --id $App.Id --exact --silent --accept-package-agreements --accept-source-agreements *> $null; $rc = $LASTEXITCODE } catch { $rc = 1 }
+        if ($rc -eq 0) { Write-OK "$($App.Id): установлено"; return }
+        Write-Warn "$($App.Id): winget недоступен (код $rc) — пробую прямой загрузчик"
     }
 
     if (-not $App.DirectUrl) { Write-Fatal "$($App.Id): нет winget и нет прямого загрузчика" }
     Write-Note "$($App.Id): прямое скачивание $($App.DirectUrl)"
-    $tmp = Join-Path $env:TEMP (Split-Path $App.DirectUrl -Leaf)
-    Invoke-WebRequest -Uri $App.DirectUrl -OutFile $tmp -UseBasicParsing -TimeoutSec 600
-    $argsList = if ($App.DirectArgs) { @($App.DirectArgs) } else { @() }
-    $p = Start-Process -FilePath $tmp -ArgumentList $argsList -Wait -PassThru -NoNewWindow
-    if ($p.ExitCode -ne 0) { Write-Warn "$($App.Id): установщик вернул код $($p.ExitCode)" }
+    try {
+        $tmp = Join-Path $env:TEMP (Split-Path $App.DirectUrl -Leaf)
+        Invoke-WebRequest -Uri $App.DirectUrl -OutFile $tmp -UseBasicParsing -TimeoutSec 900
+        $argsList = if ($App.DirectArgs) { @($App.DirectArgs) } else { @() }
+        $p = Start-Process -FilePath $tmp -ArgumentList $argsList -Wait -PassThru -NoNewWindow
+        if ($p.ExitCode -ne 0) { Write-Warn "$($App.Id): установщик вернул код $($p.ExitCode)" }
+        else { Write-OK "$($App.Id): установлено" }
+    } catch {
+        Write-Warn "$($App.Id): сбой прямого загрузчика: $($_.Exception.Message)"
+    }
 }
 
 function Deploy-InstallCore($Ctx) {
@@ -35,9 +51,9 @@ function Deploy-InstallCore($Ctx) {
 
     if (-not (Test-Admin)) { Write-Fatal 'Установки требуют администратора. Запусти деплойер из админской консоли или без -NoElevate.' }
 
-    $useWinget = Test-Command winget
-    if ($useWinget) { Write-OK 'winget доступен' }
-    else { Write-Warn 'winget не найден (App Installer отсутствует/сломан) — использую официальные прямые загрузчики.' }
+    $useWinget = Test-WingetUsable
+    if ($useWinget) { Write-OK 'winget доступен и запускается' }
+    else { Write-Warn 'winget не найден или не запускается (битый App Installer / репак без Store) — использую официальные прямые загрузчики.' }
 
     $apps = @(
         @{ Id = 'Microsoft.PowerShell'; Check = 'pwsh'; DirectUrl = 'https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.msi'; DirectArgs = @('/quiet', '/norestart') },
@@ -56,10 +72,9 @@ function Deploy-InstallCore($Ctx) {
 
     if (-not (Test-Command node)) { Write-Fatal 'Node.js не установился — opencode не сможет.' }
     Write-Note 'npm global: opencode-ai ...'
-    npm install -g opencode-ai 2>&1 | Select-Object -Last 2
-    if ($LASTEXITCODE -ne 0) { Write-Warn 'npm install opencode-ai вернул ненулевой код' }
+    try { npm install -g opencode-ai 2>&1 | Select-Object -Last 2 } catch { Write-Warn "npm opencode-ai: $($_.Exception.Message)" }
     Refresh-Path
 
     Write-OK 'Базовый набор установлен.'
-    Write-Note "opencode: $((opencode --version 2>&1) -join '')"
+    try { Write-Note "opencode: $((opencode --version 2>&1) -join '')" } catch { Write-Note 'opencode: версия недоступна' }
 }
