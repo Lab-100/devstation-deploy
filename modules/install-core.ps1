@@ -42,10 +42,42 @@ function Install-App {
         } else {
             Write-Note "$($App.Id): temp-файл уже присутствует ($([math]::Round((Get-Item $tmp).Length/1MB,1)) МБ) — не качаю повторно"
         }
-        $argsList = if ($App.DirectArgs) { @($App.DirectArgs) } else { @() }
-        $p = Start-Process -FilePath $tmp -ArgumentList $argsList -Wait -PassThru -NoNewWindow
-        if ($p.ExitCode -ne 0) { Write-Warn "$($App.Id): установщик вернул код $($p.ExitCode)" }
-        else { Write-OK "$($App.Id): установлено" }
+
+        $installOk = $false
+        if ($tmp -like '*.msi') {
+            Write-Note "$($App.Id): установка через msiexec /i"
+            $argsL = @('/i', $tmp) + @($App.DirectArgs)
+            $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList $argsL -Wait -PassThru -NoNewWindow
+            $installOk = ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010)
+        }
+        elseif ($tmp -like '*.zip') {
+            Write-Note "$($App.Id): распаковка архива"
+            $root = if ($App.DirectTarget) { $App.DirectTarget } else { Join-Path $env:ProgramFiles $App.Id }
+            New-Item -ItemType Directory -Force -Path $root | Out-Null
+            Expand-Archive -Path $tmp -DestinationPath $root -Force
+            $exe = Get-ChildItem -Path $root -Recurse -Filter "$($App.Check)*.exe" -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -eq "$($App.Check).exe" } | Select-Object -First 1
+            if ($exe) {
+                $bin = Split-Path $exe.FullName -Parent
+                $cur = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+                if ($cur -notlike "*$bin*") {
+                    [Environment]::SetEnvironmentVariable('Path', ($cur.TrimEnd(';') + ';' + $bin), 'Machine')
+                }
+                $installOk = $true
+            } else { Write-Warn "$($App.Id): в архиве не найден $($App.Check).exe" }
+        }
+        else {
+            Write-Note "$($App.Id): выполняется установщик (до 20 мин)"
+            $p = Start-Process -FilePath $tmp -ArgumentList $App.DirectArgs -PassThru -NoNewWindow
+            if (-not $p.WaitForExit(1200000)) {
+                Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+                throw "установщик не завершился за 20 минут (вероятный немой UAC-запрос в неинтерактивной сессии)"
+            }
+            $installOk = ($p.ExitCode -eq 0)
+        }
+
+        if ($installOk) { Write-OK "$($App.Id): установлено" }
+        else { Write-Warn "$($App.Id): установщик вернул код $($p.ExitCode)" }
     } catch {
         Write-Warn "$($App.Id): сбой прямого загрузчика: $($_.Exception.Message)"
     }
@@ -61,11 +93,11 @@ function Deploy-InstallCore($Ctx) {
     else { Write-Warn 'winget не найден или не запускается (битый App Installer / репак без Store) — использую официальные прямые загрузчики.' }
 
     $apps = @(
-        @{ Id = 'Microsoft.PowerShell'; Check = 'pwsh'; DirectUrl = 'https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.msi'; DirectArgs = @('/quiet', '/norestart') },
+        @{ Id = 'Microsoft.PowerShell'; Check = 'pwsh'; DirectUrl = 'https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.msi'; DirectArgs = @('/qn', '/norestart') },
         @{ Id = 'Git.Git'; Check = 'git'; DirectUrl = 'https://github.com/git-for-windows/git/releases/download/v2.45.2.windows.1/Git-2.45.2-64-bit.exe'; DirectArgs = @('/VERYSILENT', '/NORESTART', '/SP-') },
         @{ Id = 'OpenJS.NodeJS.LTS'; Check = 'node'; DirectUrl = 'https://nodejs.org/dist/latest-v20.x/node-v20.20.2-x64.msi'; DirectArgs = @('/qn', '/norestart') },
         @{ Id = 'Python.Python.3.12'; Check = 'python'; DirectUrl = 'https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe'; DirectArgs = @('/quiet', 'InstallAllUsers=1', 'PrependPath=1') },
-        @{ Id = 'Ollama.Ollama'; Check = 'ollama'; DirectUrl = 'https://ollama.com/download/OllamaSetup.exe'; DirectArgs = @('/S') },
+        @{ Id = 'Ollama.Ollama'; Check = 'ollama'; DirectUrl = 'https://ollama.com/download/ollama-windows-amd64.zip'; DirectTarget = 'C:\Program Files\Ollama' },
         @{ Id = 'GitHub.cli'; Check = 'gh'; DirectUrl = 'https://github.com/cli/cli/releases/download/v2.51.0/gh_2.51.0_windows_amd64.msi'; DirectArgs = @('/qn', '/norestart') },
         @{ Id = 'Docker.DockerDesktop'; Check = 'Docker Desktop.exe'; DirectUrl = 'https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe'; DirectArgs = @('install', '--quiet', '--accept-license') }
     )
