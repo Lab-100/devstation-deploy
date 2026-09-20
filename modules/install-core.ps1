@@ -36,7 +36,7 @@ function Deploy-InstallCore($Ctx) {
     if (-not (Test-Admin)) { Write-Fatal 'Установки требуют администратора. Запусти деплойер из админской консоли или без -NoElevate.' }
 
     $useWinget = Test-Command winget
-    if ($useWinget) { Write-OK "winget: $((winget --version))" }
+    if ($useWinget) { Write-OK 'winget доступен' }
     else { Write-Warn 'winget не найден (App Installer отсутствует/сломан) — использую официальные прямые загрузчики.' }
 
     $apps = @(

@@ -22,7 +22,9 @@ function Deploy-EnvCheck($Ctx) {
     $data = Get-BestDataDrive
     if ($data) { Write-OK "Не-системный диск для данных: $data" } else { Write-Warn 'Свободного места >= 40 ГБ вне C: не найдено — будем использовать C:' }
 
-    if (Test-Command winget) { Write-OK "winget: $((winget --version))".Trim() }
+    if (Test-Command winget) {
+        try { Write-OK "winget: $((winget --version))" } catch { Write-OK 'winget найден (версия недоступна)' }
+    }
     else { Write-Warn 'winget не найден. Нужно: Параметры → Приложения → Дополнительные возможности → установить Installer (App Installer), либо run: winget --self-update после ручной установки App Installer из Microsoft Store.' }
 
     if (-not (Test-Admin)) { Write-Warn 'Текущая сессия НЕ администратор — установки потребуют UAC (деплойер перезапустит себя).' }
