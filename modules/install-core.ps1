@@ -36,7 +36,12 @@ function Install-App {
     Write-Note "$($App.Id): прямое скачивание $($App.DirectUrl)"
     try {
         $tmp = Join-Path $env:TEMP (Split-Path $App.DirectUrl -Leaf)
-        Invoke-WebRequest -Uri $App.DirectUrl -OutFile $tmp -UseBasicParsing -TimeoutSec 900
+        $reuse = (Test-Path $tmp) -and ((Get-Item $tmp).Length -gt 8MB)
+        if (-not $reuse) {
+            Invoke-WebRequest -Uri $App.DirectUrl -OutFile $tmp -UseBasicParsing -TimeoutSec 900
+        } else {
+            Write-Note "$($App.Id): temp-файл уже присутствует ($([math]::Round((Get-Item $tmp).Length/1MB,1)) МБ) — не качаю повторно"
+        }
         $argsList = if ($App.DirectArgs) { @($App.DirectArgs) } else { @() }
         $p = Start-Process -FilePath $tmp -ArgumentList $argsList -Wait -PassThru -NoNewWindow
         if ($p.ExitCode -ne 0) { Write-Warn "$($App.Id): установщик вернул код $($p.ExitCode)" }
@@ -58,7 +63,7 @@ function Deploy-InstallCore($Ctx) {
     $apps = @(
         @{ Id = 'Microsoft.PowerShell'; Check = 'pwsh'; DirectUrl = 'https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.msi'; DirectArgs = @('/quiet', '/norestart') },
         @{ Id = 'Git.Git'; Check = 'git'; DirectUrl = 'https://github.com/git-for-windows/git/releases/download/v2.45.2.windows.1/Git-2.45.2-64-bit.exe'; DirectArgs = @('/VERYSILENT', '/NORESTART', '/SP-') },
-        @{ Id = 'OpenJS.NodeJS.LTS'; Check = 'node'; DirectUrl = 'https://nodejs.org/dist/v20.14.0/node-v20.14.0-x64.msi'; DirectArgs = @('/qn', '/norestart') },
+        @{ Id = 'OpenJS.NodeJS.LTS'; Check = 'node'; DirectUrl = 'https://nodejs.org/dist/latest-v20.x/node-v20.20.2-x64.msi'; DirectArgs = @('/qn', '/norestart') },
         @{ Id = 'Python.Python.3.12'; Check = 'python'; DirectUrl = 'https://www.python.org/ftp/python/3.12.4/python-3.12.4-amd64.exe'; DirectArgs = @('/quiet', 'InstallAllUsers=1', 'PrependPath=1') },
         @{ Id = 'Ollama.Ollama'; Check = 'ollama'; DirectUrl = 'https://ollama.com/download/OllamaSetup.exe'; DirectArgs = @('/S') },
         @{ Id = 'GitHub.cli'; Check = 'gh'; DirectUrl = 'https://github.com/cli/cli/releases/download/v2.51.0/gh_2.51.0_windows_amd64.msi'; DirectArgs = @('/qn', '/norestart') },
