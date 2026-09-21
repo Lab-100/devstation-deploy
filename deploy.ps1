@@ -28,6 +28,7 @@ param(
     [string]$Owner = 'Lab-100'
 )
 $ErrorActionPreference = 'Stop'
+$Script:DeployVersion = '0.2.0'
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Host 'Требуется PowerShell 7. Пытаюсь установить/перезапустить ...' -ForegroundColor Yellow
@@ -94,7 +95,7 @@ if ($Ctx.DataDrive -eq '') {
 
 $plan = if ($Stage -eq 'all') { @($components.Keys) } else { @($Stage) }
 
-Write-Host "`n=== devstation-deploy ===" -ForegroundColor Cyan
+Write-Host "`n=== devstation-deploy $Script:DeployVersion ===" -ForegroundColor Cyan
 Write-Host "Рабочий каталог: $($Ctx.WorkspaceDir)"
 Write-Host "Шаблон: >=16 ГБ RAM, CPU-only, WSL2 для Docker, локальные модели Ollama+ModelRunner"
 

@@ -29,6 +29,10 @@
 ## Быстрый старт
 
 ```powershell
+# 0. Инсталлер (bootstrap с GitHub Release; сам скачает-распакует и запустит deploy.ps1):
+irm https://github.com/Lab-100/devstation-deploy/releases/latest/download/install.ps1 | iex
+#    или из клона:  pwsh install.ps1 -CheckOnly   (см. install.ps1 -?) /  pwsh install.ps1
+
 # 1. Склонировать:        (git clone <private>/devstation-deploy && cd devstation-deploy)
 cd devstation-deploy
 pwsh deploy.ps1 -CheckOnly        # предварительная проверка готовности машины
@@ -92,6 +96,7 @@ pwsh deploy.ps1 -Resume
 
 ```
 deploy.ps1                      оркестратор (самоподъём UAC, state, resume)
+install.ps1                     инсталлер-бустрап: скачивает zip Release, распаковывает, запускает deploy.ps1
 modules/                        функции этапов (env-check, install-core, ollama, docker-*,
                                 tools, firecrawl, opencode, mcp, rollback, gordon, startup, verify)
 config/                         шаблоны конфигов + импортируемый профиль dev_workflow.yaml
