@@ -15,9 +15,10 @@ function Deploy-Firecrawl($Ctx) {
 
     $cli = Join-Path $Ctx.ToolDir 'tools'
     New-Item -ItemType Directory -Force -Path $cli | Out-Null
-    if (Test-Path (Join-Path $Ctx.RepoRoot 'tools\firecrawl-key.ps1')) {
-        Copy-Item (Join-Path $Ctx.RepoRoot 'tools\firecrawl-key.ps1') (Join-Path $cli 'firecrawl-key.ps1') -Force
-        Write-OK "firecrawl-key.ps1 → $cli"
+    if (Test-Path (Join-Path $cli 'firecrawl-key.ps1')) {
+        Write-OK "firecrawl-key.ps1 (шим реестра) → $cli"
+    } else {
+        Write-Warn 'firecrawl-key.ps1 не найден — этап tools не выполнился?'
     }
 
     if (Test-Command firecrawl) {

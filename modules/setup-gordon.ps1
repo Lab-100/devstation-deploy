@@ -3,13 +3,17 @@ function Deploy-Gordon($Ctx) {
 
     $toolsDest = Join-Path $Ctx.ToolDir 'tools'
     New-Item -ItemType Directory -Force -Path $toolsDest | Out-Null
-    foreach ($f in @('gordon.ps1', 'gordon-setup.ps1')) {
-        $src = Join-Path $Ctx.RepoRoot "tools\$f"
-        if (Test-Path $src) { Copy-Item $src (Join-Path $toolsDest $f) -Force }
-    }
+
+    # Инструменты gordon уже залинкованы этапом tools (tools\gordon.ps1, gordon-setup.ps1 —
+    # шимы на реестр). Провайдеры копируем в конфиг себя (gordon 0.2.x ищет их сама).
     $prov = Join-Path $Ctx.RepoRoot 'config\gordon-providers.json'
-    if (Test-Path $prov) { Copy-Item $prov (Join-Path $Ctx.ToolDir 'gordon-providers.json') -Force }
-    if (Test-Path (Join-Path $Ctx.RepoRoot 'tools\gordon.ps1')) { Write-OK "gordon.ps1/gordon-setup.ps1 + providers → $toolsDest" }
+    if (Test-Path $prov) {
+        $provDest = Join-Path $Ctx.ToolDir 'gordon-providers.json'
+        Copy-Item $prov $provDest -Force
+        Write-OK "gordon-providers.json → $provDest"
+    }
+    if (Test-Path (Join-Path $toolsDest 'gordon.ps1')) { Write-OK "gordon.ps1 (шим реестра) → $toolsDest" }
+    else { Write-Warn 'gordon.ps1 не найден — этап tools не выполнился?' }
 
     $agentsDir = Join-Path $env:USERPROFILE '.agents'
     New-Item -ItemType Directory -Force -Path $agentsDir | Out-Null
@@ -24,6 +28,6 @@ function Deploy-Gordon($Ctx) {
     $setup = Join-Path $toolsDest 'gordon-setup.ps1'
     if (Test-Path $setup) {
         Write-Note 'Запускаю gordon-setup.ps1 (линки плагинов, Model Runner, локальная модель) ...'
-        & $setup 2>&1 | Out-String | Write-Note
+        & pwsh -NoProfile -NoLogo -File $setup 2>&1 | Out-String | Write-Note
     }
 }

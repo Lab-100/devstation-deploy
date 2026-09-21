@@ -9,7 +9,10 @@ function Deploy-Opencode($Ctx) {
     New-Item -ItemType Directory -Force -Path $mcpDir | Out-Null
 
     if (-not (Test-Path (Join-Path $mcpDir 'llm_mcp_server.py'))) {
-        Copy-Item (Join-Path $Ctx.RepoRoot 'tools\llm-mcp\llm_mcp_server.py') $mcpDir -Force
+        # llm-mcp из реестра (этап tools): tools\llm-mcp\0.1.0\llm_mcp_server.py
+        $linkedLlm = Join-Path $Ctx.ToolDir 'tools\llm-mcp'
+        Write-Note "Копирую llm_mcp_server.py из $linkedLlm ..."
+        Copy-Item (Join-Path $linkedLlm 'llm_mcp_server.py') $mcpDir -Force
     }
     $venv = Join-Path $mcpDir 'venv-llm'
     if (-not (Test-Path (Join-Path $venv 'Scripts\python.exe'))) {

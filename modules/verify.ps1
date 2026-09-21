@@ -53,6 +53,9 @@ function Deploy-Verify($Ctx) {
         (Join-Path $env:USERPROFILE '.config\opencode\opencode.json'),
         (Join-Path $Ctx.ToolDir 'mcp\venv-llm\Scripts\python.exe'),
         (Join-Path $Ctx.ToolDir 'tools\backup-util.ps1'),
+        (Join-Path $Ctx.ToolDir 'tools\resolve-tools.ps1'),
+        (Join-Path $Ctx.ToolDir 'tools\registry\_registry.json'),
+        (Join-Path $Ctx.ToolDir 'tools\backup-util'),
         (Join-Path $env:USERPROFILE '.agents\gordon.yaml'),
         (Join-Path $env:USERPROFILE '.docker\cli-plugins\docker-agent.exe')
     )) {

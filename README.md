@@ -16,7 +16,7 @@
 | opencode + провайдер `ollama` + MCP `local-llm`/`firecrawl`/`MCP_DOCKER` | основной оркестратор |
 | Firecrawl CLI + скиллы | веб-скрейпинг/поиск/парсинг (ключ или keyless) |
 | GitHub CLI (`gh`) | приватные репозитории проектов |
-| Каталог откатов `rollback-catalog` (+ инструмент `backup-util.ps1`) | политика бэкапа/отката изменений |
+| Каталог откатов `rollback-catalog` + INVR-Tools (реестр+локер+шим `backup-util.ps1`) | политика бэкапа/отката изменений |
 | Автозапуск (Startup): ollama-сервер, Docker Desktop | сервисы при загрузке Windows |
 
 ## Требования к целевой машине
@@ -61,11 +61,12 @@ pwsh deploy.ps1 -Resume
 | `ollama` | env-конфиг CPU, серверный `ollama-server.cmd`, pull `hermes3:3b/8b/3b-cpu` |
 | `docker-install` | включение WSL2 (возможна перезагрузка → `-Resume`), установка Docker Desktop |
 | `docker-setup` | старт движка, плагины Гордона, Model Runner, pull `smollm2` (+`ai/qwen3` при `-PullQwen3`), импорт профиля dev_workflow, gh auth |
-| `firecrawl` | npm CLI, скиллы, `firecrawl-key.ps1` |
+| `tools` | разворачивание INVR-Tools: реестр `registry/` + локер `resolve-tools.ps1` → `%USERPROFILE%\.devstation`, линковка `tools\<tool>` (junction) + шимы `tools\*.ps1` |
+| `firecrawl` | npm CLI, скиллы, `firecrawl-key.ps1` (шим реестра) |
 | `opencode` | venv для `local-llm`, рабочий `opencode.json` (ollama+MCP), глобальный opencode.json, `AGENTS.md` |
 | `mcp` | проверка/импорт профиля `dev_workflow`, глобальный конфиг MCP_DOCKER |
-| `rollback` | `backup-util.ps1` + `rollback-root.txt`, git-каталог откатов, при `-SetupGitHub` — приватный репо |
-| `gordon` | `gordon.ps1`/`gordon-setup.ps1`/`gordon-providers.json`, `~\.agents\gordon.yaml` |
+| `rollback` | git-каталог откатов + `%USERPROFILE%\.devstation\rollback-root.txt`, при `-SetupGitHub` — приватный репо (инструмент — шим `backup-util.ps1` из этапа tools) |
+| `gordon` | `~\.agents\gordon.yaml`, `%USERPROFILE%\.devstation\gordon-providers.json` (роутер — шим `gordon.ps1`) |
 | `startup` | ярлыки автозапуска (ollama-сервер, Docker Desktop) |
 | `verify` | итоговый отчёт + `verify-report.json` |
 
@@ -92,10 +93,21 @@ pwsh deploy.ps1 -Resume
 ```
 deploy.ps1                      оркестратор (самоподъём UAC, state, resume)
 modules/                        функции этапов (env-check, install-core, ollama, docker-*,
-                                firecrawl, opencode, mcp, rollback, gordon, startup, verify)
+                                tools, firecrawl, opencode, mcp, rollback, gordon, startup, verify)
 config/                         шаблоны конфигов + импортируемый профиль dev_workflow.yaml
-tools/                          испытуемые инструменты (backup-util, gordon*, firecrawl-key, llm-mcp)
+tools/                          дистрибутив INVR-Tools:
+  registry/                       снимок реестра registry\<tool>\<version>\ + tool.json + latest.txt
+  resolve-tools.ps1               bootstrap локера (копия актуальной версии из registry\resolve-tools)
+project.json                    манифест проекта (mode=dist; этап tools создаёт манифест на таргете)
 ```
+
+## Обновление инструментов в дистрибутиве
+
+`tools/registry` — это снимок реестра `invr-tools` (источник: `Lab-100/scripts-tools`).
+Чтобы синхронизировать дистрибутив: скопировать `registry\*` и `registry\resolve-tools\<latest>\resolve-tools.ps1`
+из источника в `tools/` и закоммитить. Этап `tools` на таргете разворачивает реестр в
+`%USERPROFILE%\.devstation\tools\registry`, линкует инструменты (junction) и собирает плоские
+шимы `tools\*.ps1` — пути вызова сохраняются как раньше (`tools\backup-util.ps1` и т.д.).
 
 ## Известные замечания
 

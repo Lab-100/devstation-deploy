@@ -10,8 +10,8 @@
 [CmdletBinding()]
 param(
     [ValidateSet('all', 'env-check', 'install-core', 'ollama', 'docker-install',
-        'docker-setup', 'firecrawl', 'opencode', 'mcp', 'rollback', 'gordon',
-        'startup', 'verify')]
+        'docker-setup', 'tools', 'firecrawl', 'opencode', 'mcp', 'rollback',
+        'gordon', 'startup', 'verify')]
     [string]$Stage = 'all',
     [switch]$Resume,
     [switch]$CheckOnly,
@@ -30,7 +30,23 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
-    Write-Host 'Ошибка: требуется PowerShell 7 (pwsh). Установи его или запусти деплойер через pwsh.' -ForegroundColor Red
+    Write-Host 'Требуется PowerShell 7. Пытаюсь установить/перезапустить ...' -ForegroundColor Yellow
+    $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+    if (-not $pwsh -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+        winget install --id Microsoft.PowerShell --exact --silent --accept-package-agreements --accept-source-agreements
+    }
+    $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+    if ($pwsh) {
+        $argb = @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+        foreach ($k in $PSBoundParameters.Keys) {
+            $v = $PSBoundParameters[$k]
+            if ($v -is [switch]) { if ($v) { $argb += ("-" + $k) } }
+            elseif ($v) { $argb += ("-" + $k); $argb += [string]$v }
+        }
+        Start-Process ($pwsh.Source) -Wait -ArgumentList $argb
+        exit $LASTEXITCODE
+    }
+    Write-Host 'PowerShell 7 не установлен и не установился автоматически. Установи его (winget install Microsoft.PowerShell) и повтори.' -ForegroundColor Red
     exit 1
 }
 
@@ -40,6 +56,7 @@ $components = [ordered]@{
     'ollama'       = { param($c) Deploy-Ollama $c }
     'docker-install' = { param($c) Deploy-DockerInstall $c }
     'docker-setup' = { param($c) Deploy-DockerSetup $c }
+    'tools'        = { param($c) Deploy-Tools $c }
     'firecrawl'    = { param($c) Deploy-Firecrawl $c }
     'opencode'     = { param($c) Deploy-Opencode $c }
     'mcp'          = { param($c) Deploy-Mcp $c }

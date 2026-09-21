@@ -1,5 +1,5 @@
 function Deploy-Rollback($Ctx) {
-    Write-Step 'Каталог откатов (rollback-catalog): инструмент + git + (опц.) приватный репо'
+    Write-Step 'Каталог откатов (rollback-catalog): git + (опц.) приватный репо'
 
     if (-not $Ctx.RollbackRoot) {
         $drive = if ($Ctx.OllamaModelsDir) { Split-Path (Split-Path $Ctx.OllamaModelsDir -Parent) -Qualifier } else { $Ctx.DataDrive }
@@ -11,11 +11,12 @@ function Deploy-Rollback($Ctx) {
     }
     Write-OK "Корень каталога откатов: $($Ctx.RollbackRoot)"
 
-    $toolsDest = Join-Path $Ctx.ToolDir 'tools'
-    New-Item -ItemType Directory -Force -Path $toolsDest | Out-Null
-    Copy-Item (Join-Path $Ctx.RepoRoot 'tools\backup-util.ps1') (Join-Path $toolsDest 'backup-util.ps1') -Force
-    Set-Content -Path (Join-Path $toolsDest 'rollback-root.txt') -Value $Ctx.RollbackRoot -Encoding ascii
-    Write-OK "backup-util.ps1 + rollback-root.txt → $toolsDest"
+    # backup-util уже развёрнут этапом tools (шим links через реестр).
+    # Корень откатов фиксируем рядом: файл читается backup-util 0.2.x.
+    $homeConf = Join-Path $env:USERPROFILE '.devstation\rollback-root.txt'
+    New-Item -ItemType Directory -Force -Path (Split-Path $homeConf -Parent) | Out-Null
+    Set-Content -Path $homeConf -Value $Ctx.RollbackRoot -Encoding ascii
+    Write-OK "rollback-root.txt → $homeConf"
 
     New-Item -ItemType Directory -Force -Path $Ctx.RollbackRoot | Out-Null
     if (-not (Test-Path (Join-Path $Ctx.RollbackRoot '.git'))) {
@@ -33,6 +34,13 @@ changes/
         } finally { Pop-Location }
     } else {
         Write-OK 'Каталог откатов уже git-репозиторий.'
+    }
+
+    $toolsDest = Join-Path $Ctx.ToolDir 'tools'
+    if (Test-Path (Join-Path $toolsDest 'backup-util.ps1')) {
+        Write-OK "Инструмент откатов: $toolsDest\backup-util.ps1 (шим из реестра)"
+    } else {
+        Write-Warn 'backup-util.ps1 не найден — этап tools не выполнился?'
     }
 
     $ghOk = $false
