@@ -1,5 +1,5 @@
 function Deploy-Ollama($Ctx) {
-    Write-Step 'Ollama: кофигурация CPU-first и локальные модели'
+    Write-Step 'Ollama: конфигурация GPU-first (fallback CPU) и локальные модели'
 
     if (-not (Test-Command ollama)) { Write-Fatal 'ollama не в PATH. Сначала install-core.' }
 
@@ -12,7 +12,14 @@ function Deploy-Ollama($Ctx) {
     Write-OK "Каталог моделей: $($Ctx.OllamaModelsDir)"
 
     Set-UserEnv 'OLLAMA_MODELS' $Ctx.OllamaModelsDir
-    Set-UserEnv 'OLLAMA_LLM_LIBRARY' 'cpu_avx2'
+    $llmLib = Get-OllamaLlmLibrary
+    if ($llmLib) {
+        Set-UserEnv 'OLLAMA_LLM_LIBRARY' $llmLib
+        Write-OK "OLLAMA_LLM_LIBRARY=$llmLib"
+    } else {
+        Set-UserEnv 'OLLAMA_LLM_LIBRARY' ''
+        Write-OK 'OLLAMA_LLM_LIBRARY не задан — autodetect (GPU поддерживается)'
+    }
     Set-UserEnv 'OLLAMA_CONTEXT_LENGTH' '16384'
     Set-UserEnv 'OLLAMA_KV_CACHE_TYPE' 'q4_0'
     Set-UserEnv 'OLLAMA_NUM_PARALLEL' '1'
@@ -23,9 +30,10 @@ function Deploy-Ollama($Ctx) {
     New-Item -ItemType Directory -Force -Path $toolDir | Out-Null
     $serverCmd = Join-Path $toolDir 'ollama-server.cmd'
     $exe = (Get-Command ollama).Source
+    $libLine = if ($llmLib) { "set OLLAMA_LLM_LIBRARY=$llmLib" } else { 'rem OLLAMA_LLM_LIBRARY намеренно не задан — autodetect' }
     @"
 @echo off
-set OLLAMA_LLM_LIBRARY=cpu_avx2
+$libLine
 set OLLAMA_CONTEXT_LENGTH=16384
 set OLLAMA_KV_CACHE_TYPE=q4_0
 set OLLAMA_MODELS=$($Ctx.OllamaModelsDir)

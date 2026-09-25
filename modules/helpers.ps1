@@ -96,3 +96,46 @@ function Set-UserEnv([string]$Name, [string]$Value) {
     [Environment]::SetEnvironmentVariable($Name, $Value, 'User')
     Set-Item -Path "env:$Name" -Value $Value
 }
+
+# Выбор OLLAMA_LLM_LIBRARY по реальному железу.
+# Ловушка: при OLLAMA_LLM_LIBRARY=cpu_avx2 (или просто без него на старой карте)
+# autodetect цепляет CUDA 13, а Maxwell/Pascal/Volta (compute capability < 7.5)
+# поддержку в CUDA 13 потеряли — GPU молча не обнаруживается, всё уходит на CPU.
+# Возвращает: 'cuda_v12' | '' (autodetect) | 'cpu_avx2'
+function Get-OllamaLlmLibrary {
+    $smi = Get-Command nvidia-smi -ErrorAction SilentlyContinue
+    if (-not $smi) { return 'cpu_avx2' }
+
+    try {
+        $csv = & nvidia-smi --query-gpu=name,compute_cap --format=csv,noheader 2>$null | Out-String
+    } catch { $csv = '' }
+    if (-not $csv.Trim()) { return 'cpu_avx2' }
+
+    $best = $null
+    foreach ($line in ($csv -split "`r?`n")) {
+        $line = $line.Trim()
+        if (-not $line) { continue }
+        $parts = $line -split ','
+        if ($parts.Count -lt 2) { continue }
+        $name = $parts[0].Trim()
+        $capRaw = $parts[1].Trim()
+        # Целая часть CC: "6.1" -> 6, "8.6" -> 8, "12.0" -> 12.
+        # Берём только целую часть строкой, а не [double]::TryParse:
+        # в ru-RU культуре "6.1" не парсится (разделитель — запятая).
+        $capMajorStr = ($capRaw -split '\.')[0].Trim()
+        $capMajor = 0
+        if (-not [int]::TryParse($capMajorStr, [ref]$capMajor)) { continue }
+        if ($null -eq $best -or $capMajor -gt $best.CapMajor) {
+            $best = [pscustomobject]@{ Name = $name; CapMajor = $capMajor; Cap = $capRaw }
+        }
+    }
+    if ($null -eq $best) { return 'cpu_avx2' }
+
+    if ($best.CapMajor -lt 7) {
+        Write-Note "GPU: $($best.Name), CC $($best.Cap) (<7.5) -> OLLAMA_LLM_LIBRARY=cuda_v12 (CUDA 13 не поддерживает)"
+        return 'cuda_v12'
+    }
+
+    Write-Note "GPU: $($best.Name), CC $($best.Cap) -> autodetect (OLLAMA_LLM_LIBRARY не задан)"
+    return ''
+}

@@ -1,14 +1,14 @@
 # devstation-deploy
 
 Авторазвёртывание локальной AI-инфраструктуры Windows (10/11) с характеристиками не ниже референсной машины:
-**16+ ГБ ОЗУ, CPU-only (без GPU-ускорения), WSL2 для Docker**. Всё конфигурируется под свободное место и диски
+**16+ ГБ ОЗУ, WSL2 для Docker**. GPU используется автоматически, если он есть (fallback — CPU). Всё конфигурируется под свободное место и диски
 определённой машины, используется только бесплатное/локальное железо и офлайн-модели.
 
 ## Что разворачивается
 
 | Компонент | Роль |
 |---|---|
-| Ollama (CPU-first, контекст 16384, каталог моделей на не-системном диске) | локальные модели, MCP `local-llm` |
+| Ollama (GPU-first с fallback на CPU, контекст 16384, каталог моделей на не-системном диске) | локальные модели, MCP `local-llm` |
 | Hermes 3: `3b`, `8b`, `3b-cpu` | бесплатные офлайн-модели |
 | Docker Desktop + WSL2 | среда для MCP-контейнеров, Гордона, Model Runner |
 | Docker Agent (Гордон) + Model Runner (`smollm2`) | ИИ Docker, бесплатный локальный агент |
@@ -62,7 +62,7 @@ pwsh deploy.ps1 -Resume
 |---|---|
 | `env-check` | ОС/RAM/диски/winget/сеть/GPU |
 | `install-core` | pwsh7, git, Node LTS, Python 3.12, Ollama, gh, Docker Desktop, opencode (`npm i -g opencode-ai`) |
-| `ollama` | env-конфиг CPU, серверный `ollama-server.cmd`, pull `hermes3:3b/8b/3b-cpu` |
+| `ollama` | env-конфиг по железу (GPU-first), серверный `ollama-server.cmd`, pull `hermes3:3b/8b/3b-cpu` |
 | `docker-install` | включение WSL2 (возможна перезагрузка → `-Resume`), установка Docker Desktop |
 | `docker-setup` | старт движка, плагины Гордона, Model Runner, pull `smollm2` (+`ai/qwen3` при `-PullQwen3`), импорт профиля dev_workflow, gh auth |
 | `tools` | разворачивание INVR-Tools: реестр `registry/` + локер `resolve-tools.ps1` → `%USERPROFILE%\.devstation`, линковка `tools\<tool>` (junction) + шимы `tools\*.ps1` |
@@ -117,6 +117,9 @@ project.json                    манифест проекта (mode=dist; эт
 ## Известные замечания
 
 - CPU-машина: большие локальные модели медленные — это ожидаемо, модели/hard-limit настроены.
+- GPU определяется автоматически (`Get-OllamaLlmLibrary`): Maxwell/Pascal/Volta (CC < 7.5) получают `OLLAMA_LLM_LIBRARY=cuda_v12`,
+  т.к. CUDA 13 их не поддерживает и autodetect молча уходит на CPU; CC ≥ 7.5 — autodetect; без NVIDIA — `cpu_avx2`.
+  Ручное «лечение» переменной не нужно: и `.cmd`, и User env ставятся одинаково.
 - `npm`/`node` ставится штатно (winget); на эталонной машине была ручная nvm-шима — в deploy это не воспроизводится.
 - Docker при первом старте может предложить выход из системы/перезагрузку — см. этап `docker-install`.
 - Профиль `dev_workflow.yaml` секретен (содержит декларацию токена GitHub) — репозиторий деплоя держать приватным.

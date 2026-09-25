@@ -1,6 +1,10 @@
 @echo off
 rem Сгенерировано deploy.ps1 — НЕ редактировать вручную.
-set OLLAMA_LLM_LIBRARY=cpu_avx2
+rem OLLAMA_LLM_LIBRARY: подставляется по железу (Get-OllamaLlmLibrary):
+rem   cuda_v12 — Maxwell/Pascal/Volta (CC < 7.5), CUDA 13 их не поддерживает;
+rem   пусто     — GPU CC >= 7.5, autodetect;
+rem   cpu_avx2  — NVIDIA отсутствует.
+rem __LLM_LIBRARY_LINE__
 set OLLAMA_CONTEXT_LENGTH=16384
 set OLLAMA_KV_CACHE_TYPE=q4_0
 set OLLAMA_NUM_PARALLEL=1
