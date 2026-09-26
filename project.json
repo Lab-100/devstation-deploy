@@ -18,6 +18,7 @@
     "ai-provider-check": "0.2.x",
     "llm-mcp": "0.2.x",
     "opencode-plugins": "0.5.x",
+    "opencode-restart": "0.1.x",
     "opencode-status": "0.4.x",
     "opencode-monitor": "0.4.x",
     "infra-graph": "0.6.x",

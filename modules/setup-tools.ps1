@@ -62,11 +62,11 @@ function Deploy-Tools($Ctx) {
     # 4. Линковка: junction tools\<tool> → registry\<tool>\<latest> + плоские шимы *.ps1.
     Write-Note 'Линковка инструментов (resolve-tools link -GenerateShims) ...'
     & pwsh -NoProfile -NoLogo -File (Join-Path $dest 'resolve-tools.ps1') link `
-        -Project $Ctx.ToolDir -Registry $tgtReg -GenerateShims 2>&1 | Out-String | Write-Note
+        -Project $Ctx.ToolDir -Registry $tgtReg -ShimRoot $Ctx.ToolDir -GenerateShims 2>&1 | Out-String | Write-Note
 
     $missing = @()
     foreach ($must in @('backup-util.ps1', 'gordon.ps1', 'resolve-tools.ps1', 'mcp-watchdog.ps1',
-                        'opencode-status.ps1', 'opencode-plugins-install.ps1')) {
+                        'opencode-status.ps1', 'opencode-plugins-install.ps1', 'opencode-restart.ps1')) {
         if (-not (Test-Path (Join-Path $dest $must))) { $missing += $must }
     }
     if ($missing.Count) {
