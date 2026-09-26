@@ -30,6 +30,18 @@
 ## Сервисы (запускаются при старте Windows)
 - Ollama-сервер: `%USERPROFILE%\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\ollama-server.cmd` (CPU-линк, контекст 16384, модельный каталог — см. env `OLLAMA_MODELS`).
 - Docker Desktop — среда для MCP-контейнеров, docker-agent (Гордон) и Model Runner.
+- Демон-страж `mcp-watchdog.ps1` (живёт, пока открыт opencode): проверяет `local-llm`/`firecrawl`/`MCP_DOCKER`/`ollama`/`browsertool`/INVR-стек, чинит падения, ведёт заявки в `state\requests`. Статусы: `opencode-status.ps1 -Once`.
+
+## Реестр инструментов (INVR-Tools) — обязательно
+- Инструменты лежат в реестре: `_DEVSTATION_ROOT_\tools\registry\<tool>\<version>\` (+ `tool.json`, `latest.txt`). Рабочие вызовы — плоские шимы `_DEVSTATION_ROOT_\tools\<tool>.ps1` и junction-ссылки `tools\<tool>`.
+- Править инструмент = править его версию в реестре (новая версия, старые каталоги не трогать) и обновлять `latest.txt`; шимы руками не редактировать. Набор и версии для таргета — в `project.json` дистрибутива `devstation-deploy`.
+- Обновить/пересоздать на новой машине: `pwsh deploy.ps1 -Stage tools -UpdateRegistry` (реестр качается из `Lab-100/scripts-tools`, копии в дистрибутиве нет).
+- Ключевые инструменты: `backup-util.ps1` (каталог отката), `resolve-tools.ps1` (`link`/`status`/`update`/`purge`/`shims`), `gordon.ps1` и `gordon-chat.ps1` (роутер и канал Docker-Desktop), `mcp-watchdog.ps1` (демон-страж сервисов), `opencode-status.ps1 -Once` (быстрая сводка), `doc-extract.ps1`, `firecrawl-key.ps1`, `vmdisk.ps1`.
+
+## Плагины opencode (JS) — обязательно
+- Плагины ставятся шимом `_DEVSTATION_ROOT_\tools\opencode-plugins-install.ps1` в `%USERPROFILE%\.config\opencode\plugins` (глобально, подключаются массивом `plugin` в глобальном `opencode.json`) и в `<WorkspaceDir>\.opencode\plugins` (проектно).
+- `utf8-console.js` — авто-префикс UTF-8 для команд (лечит кракозябры), `encoding-utf8.js` — запрет воспроизводить повреждённый вывод, `language-ru.js` — русский язык рассуждений и ответов, `status-banner.js` — сводка статусов сервисов в каждом ответе.
+- Только JavaScript: Desktop opencode не загружает `.ts` (нет bun). Системные кодовые страницы (ACP/OEMCP) и профили PowerShell не менять — кодировка чинится только плагином.
 
 ## Проекты: приватные репозитории GitHub (обязательно)
 - Все пользовательские проекты хранятся в приватных репозиториях GitHub (доступ только владелец). Публичными/релизными становятся ТОЛЬКО по явной команде пользователя «в релиз» → `gh repo edit <repo> --visibility public` + тег/релиз.

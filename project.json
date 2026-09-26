@@ -2,16 +2,27 @@
   "schema": "inrv.project/1",
   "name": "devstation-deploy",
   "mode": "dist",
-  "description": "Дистрибутор INVR-Tools: tools/registry (снимок) + tools/resolve-tools.ps1 (локер). Этап tools на таргете разворачивает реестр и линкует инструменты с шимами.",
+  "description": "Дистрибутор локальной AI-инфраструктуры Windows. Реестр INVR-Tools не хранится копией в этом репозитории: этап tools скачивает релиз Lab-100/scripts-tools (tools/registry) и линкует инструменты с плоскими шимами.",
+  "registry": {
+    "repository": "Lab-100/scripts-tools",
+    "ref": "main"
+  },
   "tools": {
+    "resolve-tools": "0.3.x",
     "backup-util": "0.2.x",
-    "gordon": "0.2.x",
+    "doc-extract": "0.3.x",
+    "gordon": "0.3.x",
+    "gordon-chat": "0.2.x",
     "firecrawl-key": "0.2.x",
     "vmdisk": "0.2.x",
-    "doc-extract": "0.2.x",
     "ai-provider-check": "0.2.x",
     "llm-mcp": "0.1.x",
-    "resolve-tools": "0.2.x"
+    "opencode-plugins": "0.5.x",
+    "opencode-status": "0.3.x",
+    "opencode-monitor": "0.3.x",
+    "infra-graph": "0.4.x",
+    "mcp-watchdog": "0.2.x",
+    "browsertool": "0.1.x"
   },
   "links": {
     "dir": "tools"

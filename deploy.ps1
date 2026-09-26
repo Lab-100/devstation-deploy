@@ -6,6 +6,7 @@
 #   pwsh deploy.ps1 -Resume                                 # продолжить после перезагрузки
 #   pwsh deploy.ps1 -Stage docker-install                   # отдельный этап
 # Флаги: -PullQwen3, -SetupGitHub, -SmokeGordon, -WorkspaceDir, -OllamaModelsDir,
+#        -RegistrySource, -RegistryRepo, -RegistryRef, -UpdateRegistry,
 #        -RollbackRoot, -Owner, -ForceHardware, -ForceOverwriteConfig, -NoElevate
 [CmdletBinding()]
 param(
@@ -25,10 +26,14 @@ param(
     [string]$WorkspaceDir = 'C:\Scripts',
     [string]$OllamaModelsDir = '',
     [string]$RollbackRoot = '',
-    [string]$Owner = 'Lab-100'
+    [string]$Owner = 'Lab-100',
+    [string]$RegistrySource = '',
+    [string]$RegistryRepo = '',
+    [string]$RegistryRef = '',
+    [switch]$UpdateRegistry
 )
 $ErrorActionPreference = 'Stop'
-$Script:DeployVersion = '0.2.0'
+$Script:DeployVersion = '0.3.0'
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Host 'Требуется PowerShell 7. Пытаюсь установить/перезапустить ...' -ForegroundColor Yellow
@@ -76,6 +81,10 @@ $defaults = [ordered]@{
     RollbackRoot = $RollbackRoot
     DataDrive = ''
     Owner = $Owner
+    RegistrySource = $RegistrySource
+    RegistryRepo = $RegistryRepo
+    RegistryRef = $RegistryRef
+    UpdateRegistry = $UpdateRegistry
     PullQwen3 = $PullQwen3
     SetupGitHub = $SetupGitHub
     ForceHardware = $ForceHardware
@@ -132,6 +141,10 @@ if ($needsAdmin -and -not (Test-Admin) -and -not $NoElevate) {
     if ($OllamaModelsDir) { $argb += '-OllamaModelsDir', $OllamaModelsDir }
     if ($RollbackRoot) { $argb += '-RollbackRoot', $RollbackRoot }
     if ($Owner -ne 'Lab-100') { $argb += '-Owner', $Owner }
+    if ($RegistrySource) { $argb += '-RegistrySource', $RegistrySource }
+    if ($RegistryRepo) { $argb += '-RegistryRepo', $RegistryRepo }
+    if ($RegistryRef) { $argb += '-RegistryRef', $RegistryRef }
+    if ($UpdateRegistry) { $argb += '-UpdateRegistry' }
     Start-Process pwsh -Verb RunAs -Wait -ArgumentList $argb
     exit $LASTEXITCODE
 }

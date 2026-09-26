@@ -67,9 +67,9 @@ pwsh deploy.ps1 -Resume
 | `ollama` | env-конфиг по железу (GPU-first), серверный `ollama-server.cmd`, pull `hermes3:3b/8b/3b-cpu` |
 | `docker-install` | включение WSL2 (возможна перезагрузка → `-Resume`), установка Docker Desktop |
 | `docker-setup` | старт движка, плагины Гордона, Model Runner, pull `smollm2` (+`ai/qwen3` при `-PullQwen3`), импорт профиля dev_workflow, gh auth |
-| `tools` | разворачивание INVR-Tools: реестр `registry/` + локер `resolve-tools.ps1` → `%USERPROFILE%\.devstation`, линковка `tools\<tool>` (junction) + шимы `tools\*.ps1` |
+| `tools` | разворачивание INVR-Tools: скачивание релиза `Lab-100/scripts-tools` (`tools/registry`) → `%USERPROFILE%\.devstation`, локер `resolve-tools.ps1` из реестра, линковка `tools\<tool>` (junction) + шимы `tools\*.ps1` + cmd-шимы мониторов |
 | `firecrawl` | npm CLI, скиллы, `firecrawl-key.ps1` (шим реестра) |
-| `opencode` | venv для `local-llm`, рабочий `opencode.json` (ollama+MCP), глобальный opencode.json, `AGENTS.md` |
+| `opencode` | venv для `local-llm`, рабочий `opencode.json` (ollama+MCP), глобальный opencode.json (merge), JS-плагины opencode локально и глобально, `AGENTS.md` |
 | `mcp` | проверка/импорт профиля `dev_workflow`, глобальный конфиг MCP_DOCKER |
 | `rollback` | git-каталог откатов + `%USERPROFILE%\.devstation\rollback-root.txt`, при `-SetupGitHub` — приватный репо (инструмент — шим `backup-util.ps1` из этапа tools) |
 | `gordon` | `~\.agents\gordon.yaml`, `%USERPROFILE%\.devstation\gordon-providers.json` (роутер — шим `gordon.ps1`) |
@@ -92,6 +92,10 @@ pwsh deploy.ps1 -Resume
 -ForceHardware               продолжить, даже если RAM < 16 ГБ
 -ForceOverwriteConfig        перезаписывать существующие opencode.json/AGENTS.md
 -SmokeGordon                 прогон Гордона в verify (медленно)
+-RegistrySource <path>       реестр из каталога/архива (офлайн-развёртывание)
+-RegistryRepo <owner/name>   репозиторий реестра (по умолчанию Lab-100/scripts-tools)
+-RegistryRef <ref>           ветка/тег реестра (по умолчанию main)
+-UpdateRegistry              перекачать реестр, даже если он уже развёрнут
 ```
 
 ## Структура репозитория
@@ -102,19 +106,26 @@ install.ps1                     инсталлер-бустрап: скачив�
 modules/                        функции этапов (env-check, install-core, ollama, docker-*,
                                 tools, firecrawl, opencode, mcp, rollback, gordon, startup, verify)
 config/                         шаблоны конфигов + импортируемый профиль dev_workflow.yaml
-tools/                          дистрибутив INVR-Tools:
-  registry/                       снимок реестра registry\<tool>\<version>\ + tool.json + latest.txt
-  resolve-tools.ps1               bootstrap локера (копия актуальной версии из registry\resolve-tools)
-project.json                    манифест проекта (mode=dist; этап tools создаёт манифест на таргете)
+project.json                    манифест дистрибутива (mode=dist; состав+версии инструментов,
+                                параметры registry: repository/ref). Этап tools создаёт манифест на таргете
 ```
 
-## Обновление инструментов в дистрибутиве
+## Реестр инструментов (INVR-Tools)
 
-`tools/registry` — это снимок реестра `invr-tools` (источник: `Lab-100/scripts-tools`).
-Чтобы синхронизировать дистрибутив: скопировать `registry\*` и `registry\resolve-tools\<latest>\resolve-tools.ps1`
-из источника в `tools/` и закоммитить. Этап `tools` на таргете разворачивает реестр в
-`%USERPROFILE%\.devstation\tools\registry`, линкует инструменты (junction) и собирает плоские
-шимы `tools\*.ps1` — пути вызова сохраняются как раньше (`tools\backup-util.ps1` и т.д.).
+Копии реестра в этом репозитории **нет** — единственный источник версий инструментов:
+репозиторий `Lab-100/scripts-tools` (каталог `tools/registry`).
+
+Этап `tools` на таргете:
+1. берёт реестр из `-RegistrySource` (каталог/архив, офлайн) либо скачивает
+   `https://codeload.github.com/Lab-100/scripts-tools/tar.gz/refs/heads/<ref>`;
+2. копирует его в `%USERPROFILE%\.devstation\tools\registry`;
+3. кладёт локер `resolve-tools.ps1` из `registry\resolve-tools\<latest>\`;
+4. генерирует манифест таргета из `project.json` этого дистрибутива;
+5. линкует `tools\<tool>` (junction → `registry\<tool>\<latest>`) и плоские шимы `tools\*.ps1`;
+6. генерирует cmd-шимы мониторов (`infra-graph.cmd`, `opencode-status.cmd`, `opencode-monitor.cmd`).
+
+Обновить реестр на уже развёрнутой машине: `pwsh deploy.ps1 -Stage tools -UpdateRegistry`.
+Версии инструментов меняются только в `project.json` этого репозитория и в самом реестре.
 
 ## Известные замечания
 

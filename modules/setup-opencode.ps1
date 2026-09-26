@@ -80,19 +80,47 @@ function Deploy-Opencode($Ctx) {
 
     $globalCfgDir = Join-Path $env:USERPROFILE '.config\opencode'
     New-Item -ItemType Directory -Force -Path $globalCfgDir | Out-Null
-    $globalCfg = [ordered]@{
-        mcp = [ordered]@{
-            MCP_DOCKER = [ordered]@{
-                type = 'local'
-                command = @('docker', 'mcp', 'gateway', 'run', '--profile', 'dev_workflow')
-                environment = @{ GITHUB_PERSONAL_ACCESS_TOKEN = '{env:GITHUB_PERSONAL_ACCESS_TOKEN}' }
-                enabled = $true
-            }
-        }
-    }
     $globalCfgPath = Join-Path $globalCfgDir 'opencode.json'
-    $globalCfg | ConvertTo-Json -Depth 6 | Set-Content -Path $globalCfgPath -Encoding utf8
-    Write-OK "Глобальный opencode.json (MCP_DOCKER) → $globalCfgPath"
+    $globalCfg = if (Test-Path $globalCfgPath) {
+        try { Get-Content -LiteralPath $globalCfgPath -Raw | ConvertFrom-Json -AsHashtable } catch { @{} }
+    } else { @{} }
+    if (-not $globalCfg.ContainsKey('mcp')) { $globalCfg['mcp'] = @{} }
+    $globalCfg['mcp']['MCP_DOCKER'] = [ordered]@{
+        type = 'local'
+        command = @('docker', 'mcp', 'gateway', 'run', '--profile', 'dev_workflow')
+        environment = @{ GITHUB_PERSONAL_ACCESS_TOKEN = '{env:GITHUB_PERSONAL_ACCESS_TOKEN}' }
+        enabled = $true
+    }
+    $globalCfg | ConvertTo-Json -Depth 8 | Set-Content -Path $globalCfgPath -Encoding utf8
+    Write-OK "Глобальный opencode.json (MCP_DOCKER, merge) → $globalCfgPath"
+
+    # Плагины opencode из реестра: локальные (проектные) и глобальные.
+    $plgShim = Join-Path $Ctx.ToolDir 'tools\opencode-plugins-install.ps1'
+    if (Test-Path $plgShim) {
+        $projPlugins = Join-Path $Ctx.WorkspaceDir '.opencode\plugins'
+        Write-Note 'Устанавливаю плагины opencode (JS: utf8-console, language-ru, encoding-utf8, status-banner) ...'
+        & pwsh -NoProfile -NoLogo -File $plgShim -PluginsDir $projPlugins 2>&1 | Out-String | Write-Note
+        Write-OK "Проектные плагины → $projPlugins"
+
+        $globPlugins = Join-Path $globalCfgDir 'plugins'
+        & pwsh -NoProfile -NoLogo -File $plgShim -PluginsDir $globPlugins 2>&1 | Out-String | Write-Note
+        $pluginList = @('./plugins/encoding-utf8.js', './plugins/language-ru.js',
+                        './plugins/status-banner.js', './plugins/utf8-console.js')
+        $g2 = Get-Content -LiteralPath $globalCfgPath -Raw | ConvertFrom-Json -AsHashtable
+        $g2['plugin'] = $pluginList
+        $g2 | ConvertTo-Json -Depth 8 | Set-Content -Path $globalCfgPath -Encoding utf8
+        Write-OK "Глобальные плагины → $globPlugins (plugin в opencode.json)"
+
+        # Проектный opencode.json тоже должен подключать utf8-console/status-banner.
+        if (Test-Path $cfgPath) {
+            $pc = Get-Content -LiteralPath $cfgPath -Raw | ConvertFrom-Json -AsHashtable
+            $pc['plugin'] = @('./.opencode/plugins/status-banner.js', './.opencode/plugins/utf8-console.js')
+            $pc | ConvertTo-Json -Depth 8 | Set-Content -Path $cfgPath -Encoding utf8
+            Write-OK "Плагины прописаны в $cfgPath"
+        }
+    } else {
+        Write-Warn "Шим opencode-plugins-install.ps1 не найден ($plgShim) — плагины не установлены (запусти этап tools)."
+    }
 
     $agentsTemplate = Join-Path $Ctx.RepoRoot 'config\AGENTS.md.template'
     if ($agentsTemplate -and (Test-Path $agentsTemplate)) {

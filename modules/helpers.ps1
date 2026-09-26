@@ -139,3 +139,74 @@ function Get-OllamaLlmLibrary {
     Write-Note "GPU: $($best.Name), CC $($best.Cap) -> autodetect (OLLAMA_LLM_LIBRARY не задан)"
     return ''
 }
+
+# Каталог реестра считается валидным, если в нём есть _registry.json и latest.txt хотя бы
+# одного инструмента (иначе это мусор от недокачанного архива).
+function Test-RegistryDir([string]$Path) {
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $false }
+    if (-not (Test-Path -LiteralPath (Join-Path $Path '_registry.json'))) { return $false }
+    return ((Get-ChildItem -LiteralPath $Path -Filter 'latest.txt' -Recurse -ErrorAction SilentlyContinue |
+            Measure-Object).Count -gt 0)
+}
+
+# Приводит скачанный/разло��енный каталог к виду «каталог реестра» (внутри _registry.json).
+function Resolve-RegistryRoot([string]$Path) {
+    if (Test-RegistryDir $Path) { return $Path }
+    foreach ($cand in @((Join-Path $Path 'tools\registry'), (Join-Path $Path 'registry'))) {
+        if (Test-RegistryDir $cand) { return $cand }
+    }
+    $inner = Get-ChildItem -LiteralPath $Path -Directory -ErrorAction SilentlyContinue
+    foreach ($d in $inner) {
+        $r = Resolve-RegistryRoot $d.FullName
+        if ($r) { return $r }
+    }
+    return $null
+}
+
+function Expand-Archive-To([string]$Archive, [string]$DestDir) {
+    New-Item -ItemType Directory -Force -Path $DestDir | Out-Null
+    $tar = (Get-Command tar -ErrorAction SilentlyContinue)
+    if ($tar) {
+        & $tar.Source -xzf $Archive -C $DestDir
+        if ($LASTEXITCODE -ne 0) { Write-Fatal "tar не распаковал $Archive (код $LASTEXITCODE)" }
+        return
+    }
+    Write-Fatal 'Нет tar.exe в системе — распакуй реестр вручную и укажи -RegistrySource <путь>.'
+}
+
+# Источник реестра INVR-Tools: приоритет 1) -RegistrySource (каталог/архив),
+# 2) скачивание архива scripts-tools (Lab-100/scripts-tools) с GitHub.
+# Возвращает путь к каталогу реестра (внутри _registry.json).
+function Get-RegistrySource($Ctx, [string]$Repo, [string]$Ref, [string]$TmpDir) {
+    if ($Ctx.RegistrySource) {
+        $src = $Ctx.RegistrySource
+        if (Test-Path -LiteralPath $src -PathType Container) {
+            $root = Resolve-RegistryRoot $src
+            if (-not $root) { Write-Fatal "-RegistrySource: в каталоге $src не найден реестр (_registry.json)." }
+            return $root
+        }
+        if (Test-Path -LiteralPath $src -PathType Leaf) {
+            $ex = Join-Path $TmpDir 'unpack'
+            Expand-Archive-To $src $ex
+            $root = Resolve-RegistryRoot $ex
+            if (-not $root) { Write-Fatal "-RegistrySource: в архиве $src не найден реестр." }
+            return $root
+        }
+        Write-Fatal "-RegistrySource: путь не существует: $src"
+    }
+
+    if (-not (Test-Online)) { Write-Fatal 'Нет сети и не задан -RegistrySource — реестр скачать нельзя.' }
+    $url = "https://codeload.github.com/$Repo/tar.gz/refs/heads/$Ref"
+    $arc = Join-Path $TmpDir 'registry.tar.gz'
+    Write-Note "Скачиваю реестр: $url"
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $arc -UseBasicParsing -TimeoutSec 120
+    } catch {
+        Write-Fatal "Не скачался реестр $Repo@$Ref : $($_.Exception.Message). Укажи -RegistrySource <путь>."
+    }
+    $ex = Join-Path $TmpDir 'unpack'
+    Expand-Archive-To $arc $ex
+    $root = Resolve-RegistryRoot $ex
+    if (-not $root) { Write-Fatal "В архиве $Repo@$Ref не найден реестр (ожидался _registry.json)." }
+    return $root
+}

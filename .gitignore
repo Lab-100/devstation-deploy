@@ -3,3 +3,5 @@
 *.log
 .DS_Store
 Thumbs.db
+# реестр INVR больше не хранится копией здесь — его ставит этап tools (скачивает scripts-tools)
+/tools/

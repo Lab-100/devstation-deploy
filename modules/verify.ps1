@@ -56,12 +56,34 @@ function Deploy-Verify($Ctx) {
         (Join-Path $Ctx.ToolDir 'tools\resolve-tools.ps1'),
         (Join-Path $Ctx.ToolDir 'tools\registry\_registry.json'),
         (Join-Path $Ctx.ToolDir 'tools\backup-util'),
+        (Join-Path $Ctx.ToolDir 'tools\mcp-watchdog.ps1'),
+        (Join-Path $Ctx.ToolDir 'tools\opencode-plugins-install.ps1'),
+        (Join-Path $env:USERPROFILE '.config\opencode\plugins\utf8-console.js'),
+        (Join-Path $env:USERPROFILE '.config\opencode\plugins\encoding-utf8.js'),
+        (Join-Path $Ctx.WorkspaceDir '.opencode\plugins\utf8-console.js'),
+        (Join-Path $Ctx.ToolDir 'gordon-providers.json'),
         (Join-Path $env:USERPROFILE '.agents\gordon.yaml'),
         (Join-Path $env:USERPROFILE '.docker\cli-plugins\docker-agent.exe')
     )) {
         $p = Test-Path $f
         $report += [pscustomobject]@{ Check = "file $(Split-Path $f -Leaf)"; OK = $p; Info = $f }
         if ($p) { Write-OK "Артефакт: $f" } else { $ok = $false; Write-Warn "Нет файла: $f" }
+    }
+
+    # Плагины в глобальном opencode.json должны быть прописаны (иначе не применятся).
+    $gcfg = Join-Path $env:USERPROFILE '.config\opencode\opencode.json'
+    if (Test-Path $gcfg) {
+        try {
+            $gj = Get-Content -LiteralPath $gcfg -Raw | ConvertFrom-Json
+            $pl = @($gj.plugin)
+            $hasPl = $pl.Count -gt 0
+            $report += [pscustomobject]@{ Check = 'global plugin[]'; OK = $hasPl; Info = ($pl -join ',') }
+            if ($hasPl) { Write-OK "Глобальные плагины: $($pl -join ', ')" }
+            else { $ok = $false; Write-Warn 'В глобальном opencode.json нет массива plugin.' }
+        } catch {
+            $report += [pscustomobject]@{ Check = 'global plugin[]'; OK = $false; Info = 'JSON не читается' }
+            $ok = $false
+        }
     }
 
     if ($Ctx.RollbackRoot -and (Test-Path $Ctx.RollbackRoot)) {

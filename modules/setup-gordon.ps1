@@ -5,12 +5,15 @@ function Deploy-Gordon($Ctx) {
     New-Item -ItemType Directory -Force -Path $toolsDest | Out-Null
 
     # Инструменты gordon уже залинкованы этапом tools (tools\gordon.ps1, gordon-setup.ps1 —
-    # шимы на реестр). Провайдеры копируем в конфиг себя (gordon 0.2.x ищет их сама).
-    $prov = Join-Path $Ctx.RepoRoot 'config\gordon-providers.json'
+    # шимы на реестр). Конфиг провайдеров берём из реестра (tools\gordon — junction на
+    # registry\gordon\<latest>), в дистрибутиве копии нет.
+    $prov = Join-Path $toolsDest 'gordon\gordon-providers.json'
     if (Test-Path $prov) {
         $provDest = Join-Path $Ctx.ToolDir 'gordon-providers.json'
         Copy-Item $prov $provDest -Force
-        Write-OK "gordon-providers.json → $provDest"
+        Write-OK "gordon-providers.json (из реестра) → $provDest"
+    } else {
+        Write-Warn "gordon-providers.json не найден в реестре ($prov) — роутер возьмёт значения по умолчанию."
     }
     if (Test-Path (Join-Path $toolsDest 'gordon.ps1')) { Write-OK "gordon.ps1 (шим реестра) → $toolsDest" }
     else { Write-Warn 'gordon.ps1 не найден — этап tools не выполнился?' }
