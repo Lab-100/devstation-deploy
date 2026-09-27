@@ -12,9 +12,23 @@ function Deploy-EnvCheck($Ctx) {
     Write-Note "RAM: $ramGB ГБ (требуется >= 16)"
     if ($ramGB -lt 16) { if ($Ctx.ForceHardware) { Write-Warn 'RAM < 16 ГБ — продолжаем с -ForceHardware' } else { Write-Warn 'RAM < 16 ГБ — не гарантируется бесперебойная работа' } }
 
-    $gpu = Get-CimInstance Win32_VideoController | Select-Object -First 1
-    Write-Note "GPU: $($gpu.Name)"
-    if ($gpu.Name -match 'NVIDIA|RTX|GTX' ) { Write-Note 'CUDA-обвязки НЕ ставятся: конфигурация CPU-first (как на референсной машине).' }
+    # GPU: на ноутбуках Win32_VideoController отдаёт встроенную графику первой,
+    # поэтому дискретную карту выбираем приоритетно, а не по порядку.
+    $allGpu = @(Get-CimInstance Win32_VideoController -EA SilentlyContinue |
+        Where-Object { $_.Name -and $_.Name -notmatch 'Microsoft Basic|Remote Desktop' })
+    $gpu = $allGpu | Where-Object { $_.Name -match 'NVIDIA|GeForce|RTX|GTX|Radeon|AMD' } | Select-Object -First 1
+    if (-not $gpu) { $gpu = $allGpu | Select-Object -First 1 }
+    if ($gpu) {
+        Write-Note "GPU: $($gpu.Name)"
+        $others = $allGpu | Where-Object { $_.Name -ne $gpu.Name }
+        foreach ($o in $others) { Write-Note "  также: $($o.Name)" }
+    } else {
+        Write-Note 'GPU: не определён (вероятно, без дискретной графики)'
+    }
+    if ($gpu -and $gpu.Name -match 'NVIDIA|GeForce|RTX|GTX') {
+        # функция сама выводит имя карты, CC и выбранную библиотеку
+        $null = Get-OllamaLlmLibrary
+    }
 
     foreach ($drive in Get-CimInstance Win32_LogicalDisk -Filter "DriveType=3") {
         Write-Note "Диск $($drive.DeviceID): свободно $([math]::Round([double]$drive.FreeSpace/1GB,1)) ГБ"

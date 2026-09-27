@@ -23,7 +23,7 @@ param(
     [switch]$SmokeGordon,
     [switch]$ForceHardware,
     [switch]$ForceOverwriteConfig,
-    [string]$WorkspaceDir = 'C:\Scripts',
+    [string]$WorkspaceDir = '',
     [string]$OllamaModelsDir = '',
     [string]$RollbackRoot = '',
     [string]$Owner = 'Lab-100',
@@ -33,7 +33,16 @@ param(
     [switch]$UpdateRegistry
 )
 $ErrorActionPreference = 'Stop'
-$Script:DeployVersion = '0.3.0'
+$Script:DeployVersion = '0.3.1'
+
+# Рабочий каталог (куда кладутся opencode.json и AGENTS.md) по умолчанию не
+# привязан к конкретной машине: переменная окружения DEVSTATION_WORKSPACE,
+# затем существующий каталог оркестрации, затем корень этого репозитория.
+if (-not $WorkspaceDir) {
+    $WorkspaceDir = if ($env:DEVSTATION_WORKSPACE) { $env:DEVSTATION_WORKSPACE }
+                    elseif (Test-Path -LiteralPath 'C:\Scripts\AGENTS.md') { 'C:\Scripts' }
+                    else { Split-Path -Parent $PSCommandPath }
+}
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     Write-Host 'Требуется PowerShell 7. Пытаюсь установить/перезапустить ...' -ForegroundColor Yellow
@@ -137,7 +146,9 @@ if ($needsAdmin -and -not (Test-Admin) -and -not $NoElevate) {
     foreach ($s in @('Resume','PullQwen3','SetupGitHub','SmokeGordon','ForceHardware','ForceOverwriteConfig')) {
         if (Get-Variable -Name $s -ValueOnly -ErrorAction SilentlyContinue) { $argb += "-$s" }
     }
-    if ($WorkspaceDir -ne 'C:\Scripts') { $argb += '-WorkspaceDir', $WorkspaceDir }
+    # -WorkspaceDir передаём только если он задан явно: иначе дочерний процесс
+    # вычислит тот же дефолт сам (та же переменная окружения и тот же путь).
+    if ($PSBoundParameters.ContainsKey('WorkspaceDir') -and $WorkspaceDir) { $argb += '-WorkspaceDir', $WorkspaceDir }
     if ($OllamaModelsDir) { $argb += '-OllamaModelsDir', $OllamaModelsDir }
     if ($RollbackRoot) { $argb += '-RollbackRoot', $RollbackRoot }
     if ($Owner -ne 'Lab-100') { $argb += '-Owner', $Owner }

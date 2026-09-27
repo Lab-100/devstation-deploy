@@ -76,6 +76,24 @@ pwsh deploy.ps1 -Resume
 | `startup` | ярлыки автозапуска (ollama-сервер, Docker Desktop) |
 | `verify` | итоговый отчёт + `verify-report.json` |
 
+### Перезапуск opencode
+
+После установки и правки конфигов (`opencode.json`, плагины, MCP) текущая
+сессия opencode не подхватывает изменения — нужен перезапуск. На развёрнутой
+машине есть готовый шим реестра:
+
+```powershell
+# из отдельного окна PowerShell или Проводника (текущая сессия opencode оборвётся)
+& "$env:USERPROFILE\.devstation\tools\opencode-restart.cmd"
+
+# вариант для скриптов: ждать готовности MCP, ничего не запускать
+pwsh -NoProfile -File "$env:USERPROFILE\.devstation\tools\opencode-restart.ps1" -NoLaunch -Json
+```
+
+Скрипт перезапускает opencode, поднимает демон-страж `mcp-watchdog` и дожидается
+готовности MCP-серверов. Рядом живёт `mcp-watchdog-guardian` — сторож, который
+сам поднимает демон-страж, если тот завис (автостарт через HKCU Run).
+
 ## Параметры
 
 ```
@@ -85,7 +103,7 @@ pwsh deploy.ps1 -Resume
 -PullQwen3                   дополнительно тянуть ai/qwen3 (≥5 ГБ RAM)
 -SetupGitHub                 создавать приватный репо <Owner>/rollback-catalog
 -Owner <owner>               владелец GitHub (по умолчанию Lab-100)
--WorkspaceDir <path>         куда кладётся opencode.json/AGENTS.md (по умолчанию C:\Scripts)
+-WorkspaceDir <path>         куда кладётся opencode.json/AGENTS.md (по умолчанию: DEVSTATION_WORKSPACE, иначе существующий каталог оркестрации, иначе корень этого репозитория)
 -OllamaModelsDir <path>      каталог моделей (по умолчанию <первый не-системный диск>\OllamaModels)
 -RollbackRoot <path>         каталог откатов (по умолчанию <диск моделей>\rollback-catalog)
 -NoElevate                   не перезапускаться с UAC
@@ -122,7 +140,14 @@ project.json                    манифест дистрибутива (mode=
 3. кладёт локер `resolve-tools.ps1` из `registry\resolve-tools\<latest>\`;
 4. генерирует манифест таргета из `project.json` этого дистрибутива;
 5. линкует `tools\<tool>` (junction → `registry\<tool>\<latest>`) и плоские шимы `tools\*.ps1`;
-6. генерирует cmd-шимы мониторов (`infra-graph.cmd`, `opencode-status.cmd`, `opencode-monitor.cmd`).
+6. генерирует cmd-шимы мониторов (`infra-graph.cmd`, `opencode-status.cmd`,
+   `opencode-monitor.cmd`, `opencode-restart.cmd`).
+
+Шимы переносимые: реестр ищется от расположения самого шима, поэтому в
+раскладке дистрибутива (шимы в `.devstation`, реестр в `.devstation\tools\registry`)
+и в клоне реестра один и тот же шим работает без правок. Пути каталогов
+задаются переменными окружения: `INVR_REGISTRY`, `INVR_LOG_DIR`,
+`INVR_ROLLBACK_ROOT`, `INVR_VM_ROOT` (см. README реестра).
 
 Обновить реестр на уже развёрнутой машине: `pwsh deploy.ps1 -Stage tools -UpdateRegistry`.
 Версии инструментов меняются только в `project.json` этого репозитория и в самом реестре.
@@ -133,6 +158,8 @@ project.json                    манифест дистрибутива (mode=
 - GPU определяется автоматически (`Get-OllamaLlmLibrary`): Maxwell/Pascal/Volta (CC < 7.5) получают `OLLAMA_LLM_LIBRARY=cuda_v12`,
   т.к. CUDA 13 их не поддерживает и autodetect молча уходит на CPU; CC ≥ 7.5 — autodetect; без NVIDIA — `cpu_avx2`.
   Ручное «лечение» переменной не нужно: и `.cmd`, и User env ставятся одинаково.
+  `env-check` показывает дискретную карту, а не встроенную графику (на ноутбуках
+  встроенная приходит первой), и выводит её Compute Capability.
 - `npm`/`node` ставится штатно (winget); на эталонной машине была ручная nvm-шима — в deploy это не воспроизводится.
 - Docker при первом старте может предложить выход из системы/перезагрузку — см. этап `docker-install`.
 - Профиль `dev_workflow.yaml` **не содержит токен** — только ссылку на переменную окружения

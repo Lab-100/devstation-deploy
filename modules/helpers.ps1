@@ -119,19 +119,24 @@ function Get-OllamaLlmLibrary {
         if ($parts.Count -lt 2) { continue }
         $name = $parts[0].Trim()
         $capRaw = $parts[1].Trim()
-        # Целая часть CC: "6.1" -> 6, "8.6" -> 8, "12.0" -> 12.
-        # Берём только целую часть строкой, а не [double]::TryParse:
-        # в ru-RU культуре "6.1" не парсится (разделитель — запятая).
-        $capMajorStr = ($capRaw -split '\.')[0].Trim()
+        # CC разбираем по компонентам: "6.1" -> major=6, minor=1.
+        # Не через [double]::TryParse: в ru-RU культуре "6.1" не парсится
+        # (разделитель — запятая). Целые части сравниваем отдельно, иначе
+        # теряется дробная часть и CC 7.5 ошибочно уходит в autodetect.
+        $capParts = $capRaw -split '\.'
         $capMajor = 0
-        if (-not [int]::TryParse($capMajorStr, [ref]$capMajor)) { continue }
-        if ($null -eq $best -or $capMajor -gt $best.CapMajor) {
-            $best = [pscustomobject]@{ Name = $name; CapMajor = $capMajor; Cap = $capRaw }
+        $capMinor = 0
+        if (-not [int]::TryParse($capParts[0].Trim(), [ref]$capMajor)) { continue }
+        if ($capParts.Count -gt 1) { [void][int]::TryParse($capParts[1].Trim(), [ref]$capMinor) }
+        if ($null -eq $best -or $capMajor -gt $best.CapMajor -or
+            ($capMajor -eq $best.CapMajor -and $capMinor -gt $best.CapMinor)) {
+            $best = [pscustomobject]@{ Name = $name; CapMajor = $capMajor; CapMinor = $capMinor; Cap = $capRaw }
         }
     }
     if ($null -eq $best) { return 'cpu_avx2' }
 
-    if ($best.CapMajor -lt 7) {
+    # Pascal/Maxwell/Volta (CC < 7.5) не поддерживаются драйверами CUDA 13+.
+    if ($best.CapMajor -lt 7 -or ($best.CapMajor -eq 7 -and $best.CapMinor -lt 5)) {
         Write-Note "GPU: $($best.Name), CC $($best.Cap) (<7.5) -> OLLAMA_LLM_LIBRARY=cuda_v12 (CUDA 13 не поддерживает)"
         return 'cuda_v12'
     }
