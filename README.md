@@ -31,9 +31,11 @@
 ## Быстрый старт
 
 ```powershell
-# 0. Инсталлер (bootstrap с GitHub Release; сам скачает-распакует и запустит deploy.ps1):
+# 0. Инсталлер (bootstrap; сам скачает дистрибутив с GitHub и запустит deploy.ps1).
+#    gh и авторизация не нужны: используется публичный codeload-архив.
 irm https://github.com/Lab-100/devstation-deploy/releases/latest/download/install.ps1 | iex
 #    или из клона:  pwsh install.ps1 -CheckOnly   (см. install.ps1 -?) /  pwsh install.ps1
+#    конкретная версия/ветка:  pwsh install.ps1 -Tag v0.3.2   /   -Ref main
 
 # 1. Склонировать:        (git clone <private>/devstation-deploy && cd devstation-deploy)
 cd devstation-deploy
@@ -128,7 +130,7 @@ pwsh -NoProfile -File "$env:USERPROFILE\.devstation\tools\opencode-restart.ps1" 
 
 ```
 deploy.ps1                      оркестратор (самоподъём UAC, state, resume)
-install.ps1                     инсталлер-бустрап: скачивает zip Release, распаковывает, запускает deploy.ps1
+install.ps1                     инсталлер-бустрап: качает codeload-архив по тегу/ветке (без gh и авторизации), распаковывает, запускает deploy.ps1
 modules/                        функции этапов (env-check, install-core, ollama, docker-*,
                                 tools, firecrawl, opencode, mcp, rollback, gordon, startup, verify)
 config/                         шаблоны конфигов + импортируемый профиль dev_workflow.yaml

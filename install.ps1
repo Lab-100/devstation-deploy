@@ -1,15 +1,18 @@
 # devstation-deploy installer (bootstrap).
-# Скачивает дистрибутив из GitHub Release (через gh) или из локального zip
-# и запускает deploy.ps1. Инсталлер однофайловый, версия не привязана к дистрибу.
+# Скачивает дистрибутив из публичного GitHub (codeload-архив по тегу/ветке,
+# БЕЗ gh и без авторизации) или из локального zip и запускает deploy.ps1.
+# Инсталлер однофайловый, версия не привязана к дистрибутиву.
 # Использование:
-#   pwsh install.ps1                          # последний Release (нужен gh auth)
-#   pwsh install.ps1 -Tag v0.2.0              # конкретный тег
-#   pwsh install.ps1 -SourceZip .\v0.2.0.zip  # локальный дистрибутив
+#   pwsh install.ps1                          # последний релиз, иначе ветка main
+#   pwsh install.ps1 -Tag v0.3.2              # конкретный тег
+#   pwsh install.ps1 -Ref main                # конкретная ветка
+#   pwsh install.ps1 -SourceZip .\dist.zip    # локальный дистрибутив
 #   pwsh install.ps1 -CheckOnly / -DryRun / -Resume ...   # проброс флагов в deploy.ps1
 # Флаги deploy.ps1 передаются как есть: -PullQwen3, -SetupGitHub, -Owner, -WorkspaceDir, ...
 [CmdletBinding()]
 param(
     [string]$Tag = '',
+    [string]$Ref = '',
     [string]$SourceZip = '',
     [string]$Repo = 'Lab-100/devstation-deploy',
     [switch]$CheckOnly,
@@ -35,25 +38,52 @@ $haveSource = Test-Path $deploy
 if (-not $haveSource) {
     $zip = $SourceZip
     if (-not $zip) {
-        $gh = Join-Path (Get-Command gh -ErrorAction SilentlyContinue).Source ''
-        if (-not $gh) {
-            Write-Host 'gh не найден. Установи GitHub CLI (winget install GitHub.cli) или используй -SourceZip.' -ForegroundColor Red
-            exit 1
+        # GitHub требует авторизацию для gh release download, а codeload отдаёт
+        # полный исходник публично и без gh — поэтому качаем архив репозитория.
+        $ref = $Ref
+        if (-not $ref) {
+            $ref = $Tag
+            if (-not $ref) {
+                try {
+                    $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" `
+                        -Headers @{ 'User-Agent' = 'devstation-deploy-installer' } -TimeoutSec 30
+                    $ref = $rel.tag_name
+                    Write-Host "Последний релиз: $ref"
+                } catch {
+                    Write-Host "Не удалось определить последний релиз ($($_.Exception.Message)); беру ветку main." -ForegroundColor DarkGray
+                    $ref = 'main'
+                }
+            }
         }
-        Write-Host "Скачиваю дистрибутив $Repo@$($Tag -replace '^$','latest') ..."
+        $isTag = $ref -match '^v\d'
+        $kind = if ($isTag) { 'tags' } else { 'heads' }
+        $url = "https://codeload.github.com/$Repo/zip/refs/$kind/$ref"
+        Write-Host "Скачиваю дистрибутив $Repo@$ref ..."
         $tmp = Join-Path $env:TEMP "devstation-deploy-$([guid]::NewGuid().ToString('N'))"
         New-Item -ItemType Directory -Force -Path $tmp | Out-Null
-        $tagArgs = @('release', 'download', '--repo', $Repo, '--pattern', '*.zip')
-        if ($Tag) { $tagArgs += '--tag', $Tag }
-        $dl = gh @tagArgs --dir $tmp 2>&1
-        if ($LASTEXITCODE -ne 0) { Write-Host "Скачивание не удалось: $dl" -ForegroundColor Red; exit 1 }
-        $zip = Get-ChildItem $tmp -Filter '*.zip' | Select-Object -First 1 -ExpandProperty FullName
-        if (-not $zip) { Write-Host 'В релизе нет zip-архива.' -ForegroundColor Red; exit 1 }
+        $zip = Join-Path $tmp 'dist.zip'
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $zip -TimeoutSec 300 -UseBasicParsing
+        } catch {
+            Write-Host "Скачивание не удалось ($($_.Exception.Message)). Проверь интернет или укажи -SourceZip." -ForegroundColor Red
+            exit 1
+        }
+        if (-not (Test-Path $zip) -or (Get-Item $zip).Length -lt 1024) {
+            Write-Host 'Архив пуст или повреждён.' -ForegroundColor Red
+            exit 1
+        }
     }
     Write-Host "Распаковываю в $dest ..."
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    Expand-Archive -LiteralPath $zip -DestinationPath $dest -Force
-    if (-not (Test-Path $deploy)) { Write-Host 'В архиве нет deploy.ps1 (неверный zip).' -ForegroundColor Red; exit 1 }
+    # codeload отдаёт единый корневой каталог (например devstation-deploy-0.3.2),
+    # поэтому разворачиваем во временный каталог и поднимаем содержимое на уровень $dest.
+    $stage = Join-Path $env:TEMP "devstation-deploy-stage-$([guid]::NewGuid().ToString('N'))"
+    Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
+    $root = Get-ChildItem -LiteralPath $stage -Directory | Select-Object -First 1
+    if (-not $root) { Write-Host 'Архив пуст.' -ForegroundColor Red; exit 1 }
+    Copy-Item -Path (Join-Path $root.FullName '*') -Destination $dest -Recurse -Force
+    Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not (Test-Path $deploy)) { Write-Host 'В архиве нет deploy.ps1 (неверный архив).' -ForegroundColor Red; exit 1 }
 }
 
 # 2. Требуется PowerShell 7 у нас самих
