@@ -99,7 +99,10 @@ $defaults = [ordered]@{
     ForceHardware = $ForceHardware
     ForceOverwriteConfig = $ForceOverwriteConfig
     SmokeGordon = $SmokeGordon
-    ToolDir = Join-Path $env:USERPROFILE '.devstation'
+    # Корень развёртывания: DEVSTATION_ROOT (удобно для стендов и проверок),
+    # иначе обычный %USERPROFILE%\.devstation.
+    ToolDir = if ($env:DEVSTATION_ROOT) { $env:DEVSTATION_ROOT }
+              else { Join-Path $env:USERPROFILE '.devstation' }
     RepoRoot = $PSScriptRoot
     Done = @()
     RebootRequired = $false
@@ -187,4 +190,4 @@ Write-Host 'Дальше вручную (однократно):' -ForegroundColo
 Write-Host '  • gh auth login         — если gh не авторизован' -ForegroundColor DarkGray
 Write-Host '  • FIRECRAWL_API_KEY    — firecrawl-key.ps1 -Mode Init/Poll (опционально, keyless работает)' -ForegroundColor DarkGray
 Write-Host "  • зайди в $($Ctx.WorkspaceDir) и вызови opencode" -ForegroundColor DarkGray
-Write-Host "Логи: $env:ProgramData\devstation-deploy\state.json" -ForegroundColor DarkGray
+Write-Host "Состояние: $(Get-StatePath)" -ForegroundColor DarkGray

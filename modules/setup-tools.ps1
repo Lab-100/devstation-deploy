@@ -60,9 +60,11 @@ function Deploy-Tools($Ctx) {
     Write-OK "Манифест ($($toolsMap.Count) инструментов) → $mp"
 
     # 4. Линковка: junction tools\<tool> → registry\<tool>\<latest> + плоские шимы *.ps1.
+    #    Шимы кладём рядом с реестром ($dest), а не уровнем выше: тогда переносимый
+    #    шим находит реестр как $PSScriptRoot\registry.
     Write-Note 'Линковка инструментов (resolve-tools link -GenerateShims) ...'
     & pwsh -NoProfile -NoLogo -File (Join-Path $dest 'resolve-tools.ps1') link `
-        -Project $Ctx.ToolDir -Registry $tgtReg -ShimRoot $Ctx.ToolDir -GenerateShims 2>&1 | Out-String | Write-Note
+        -Project $Ctx.ToolDir -Registry $tgtReg -ShimRoot $dest -GenerateShims 2>&1 | Out-String | Write-Note
 
     $missing = @()
     foreach ($must in @('backup-util.ps1', 'gordon.ps1', 'resolve-tools.ps1', 'mcp-watchdog.ps1',
@@ -76,10 +78,27 @@ function Deploy-Tools($Ctx) {
     }
 
     # 5. cmd-шимы мониторов (генерируются инсталлером плагинов, переносимые %~dp0).
+    #    -Force обязателен: без него установщик требует уже существующий каталог
+    #    плагинов, падает и cmd-шимы не создаются вовсе.
     $plgShim = Join-Path $dest 'opencode-plugins-install.ps1'
     if (Test-Path $plgShim) {
-        & pwsh -NoProfile -NoLogo -File $plgShim -ShimsDir $dest 2>&1 | Out-String | Write-Note
-        Write-OK "cmd-шимы мониторов → $dest\*.cmd"
+        # Каталог-пробник временный и НЕ junction: tools\<tool> — это линк в
+        # реестр, и копирование плагинов «сам в себя» падает.
+        $probe = Join-Path $dest '.cmd-shim-probe'
+        try {
+            & pwsh -NoProfile -NoLogo -File $plgShim `
+                -PluginsDir $probe -ShimsDir $dest -Force 2>&1 | Out-String | Write-Note
+        } finally {
+            Remove-Item -LiteralPath $probe -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        $cmds = @(Get-ChildItem -LiteralPath $dest -Filter *.cmd -File -ErrorAction SilentlyContinue)
+        if ($cmds.Count) {
+            Write-OK "cmd-шимы мониторов → $dest\*.cmd ($($cmds.Name -join ', '))"
+        } else {
+            Write-Warn 'cmd-шимы мониторов не созданы — см. вывод установщика плагинов выше.'
+        }
+    } else {
+        Write-Warn "Нет шима установщика плагинов ($plgShim) — cmd-шимы не созданы."
     }
 
     $Ctx.InvrToolsReady = $true

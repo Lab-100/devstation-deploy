@@ -116,6 +116,14 @@ pwsh -NoProfile -File "$env:USERPROFILE\.devstation\tools\opencode-restart.ps1" 
 -UpdateRegistry              перекачать реестр, даже если он уже развёрнут
 ```
 
+Переменные окружения (удобно для стендов и проверок, чтобы не трогать боевую машину):
+
+| Переменная | Назначение | По умолчанию |
+|---|---|---|
+| `DEVSTATION_ROOT` | корень развёртывания | `%USERPROFILE%\.devstation` |
+| `DEVSTATION_WORKSPACE` | рабочий каталог (opencode.json, AGENTS.md) | существующий каталог оркестрации, иначе корень репозитория |
+| `DEVSTATION_STATE_FILE` | файл состояния (для `-Resume`) | `%ProgramData%\devstation-deploy\state.json` |
+
 ## Структура репозитория
 
 ```

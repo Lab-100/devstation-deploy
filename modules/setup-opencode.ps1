@@ -99,11 +99,11 @@ function Deploy-Opencode($Ctx) {
     if (Test-Path $plgShim) {
         $projPlugins = Join-Path $Ctx.WorkspaceDir '.opencode\plugins'
         Write-Note 'Устанавливаю плагины opencode (JS: utf8-console, language-ru, encoding-utf8, status-banner) ...'
-        & pwsh -NoProfile -NoLogo -File $plgShim -PluginsDir $projPlugins 2>&1 | Out-String | Write-Note
+        & pwsh -NoProfile -NoLogo -File $plgShim -PluginsDir $projPlugins -ShimsDir (Join-Path $Ctx.ToolDir 'tools') -Force 2>&1 | Out-String | Write-Note
         Write-OK "Проектные плагины → $projPlugins"
 
         $globPlugins = Join-Path $globalCfgDir 'plugins'
-        & pwsh -NoProfile -NoLogo -File $plgShim -PluginsDir $globPlugins 2>&1 | Out-String | Write-Note
+        & pwsh -NoProfile -NoLogo -File $plgShim -PluginsDir $globPlugins -ShimsDir (Join-Path $Ctx.ToolDir 'tools') -Force 2>&1 | Out-String | Write-Note
         $pluginList = @('./plugins/encoding-utf8.js', './plugins/language-ru.js',
                         './plugins/status-banner.js', './plugins/utf8-console.js')
         $g2 = Get-Content -LiteralPath $globalCfgPath -Raw | ConvertFrom-Json -AsHashtable

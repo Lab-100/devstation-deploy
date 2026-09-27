@@ -39,6 +39,9 @@ function Invoke-Ok([string]$Command, [string]$Label) {
 }
 
 function Get-StatePath {
+    # Переопределение через DEVSTATION_STATE_FILE нужно для проверок на стендах:
+    # тестовый прогон не должен переписывать состояние боевой машины.
+    if ($env:DEVSTATION_STATE_FILE) { return $env:DEVSTATION_STATE_FILE }
     return Join-Path $env:ProgramData 'devstation-deploy\state.json'
 }
 
