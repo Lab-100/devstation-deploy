@@ -1,0 +1,243 @@
+# Непрерывная проверка качества PowerShell-кода (devstation-deploy)
+#
+# Что проверяем и почему именно так:
+#
+# 1) Разбираемость (parse) ВСЕХ .ps1/.psm1 парсером PowerShell — это блокирующая
+#    проверка. Синтаксическая ошибка ломает весь деплой на целевой машине, поэтому
+#    это единственная проверка, которая обязана валить сборку.
+#
+# 2) Pester — запускается ТОЛЬКО если в репозитории реально есть файлы
+#    *.Tests.ps1 / *.Test.ps1. На момент добавления workflow тестов в репозитории
+#    нет; выдумывать их ради зелёного CI нельзя, поэтому шаг корректно пропускается
+#    с явным сообщением. Как только тесты появятся — шаг начнёт их выполнять
+#    (Pester 5), ничего править в workflow не придётся.
+#
+# 3) PSScriptAnalyzer — НАЧИНАЕМ С ОТЧЁТА, БЕЗ Провала сборки. Это осознанное
+#    решение, а не лень. Замер на текущем коде (PSScriptAnalyzer 1.25.0):
+#    всего 64 замечания, все уровня Warning, ошибок уровня Error — НОЛЬ.
+#    Из них 52 штуки (81%) — это два правила, которые прямо противоречат
+#    осознанным договорённостям репозитория:
+#      * PSAvoidUsingWriteHost (37) — README прямо декларирует, что «логи команд
+#        пишутся прямо в консоль», т.е. Write-Host здесь намеренный и является
+#        штатным способом вывода этого проекта. Правило по умолчанию его запрещает.
+#      * PSUseBOMForUnicodeEncodedFile (15) — все файлы репозитория намеренно
+#        сохранены в UTF-8 БЕЗ BOM (современный стандарт, проект требует pwsh 7).
+#        Требование добавить BOM — устаревшая рекомендация под Windows PowerShell 5.1.
+#    Оставшиеся 12 затрагивают защитные catch-блоки и API-хелперов
+#    (Refresh-Path, Load-State, Deploy-Tools, Set-StageDone, Set-UserEnv, Invoke-Expression)
+#    и являются частью существующего публичного API скриптов. Чтобы провести
+#    такой анализ «до нуля», пришлось бы массово переписать чужой рабочий код
+#    в 9 модулях — это ломает совместимость скриптов развёртывания и прямо
+#    запрещено заданием («не чини массово чужой код ради прохождения проверки»).
+#    Поэтому: правила-антагонисты исключены явным списком, остальные замечания
+#    публикуются полным отчётом (лог + артефакт), а валит сборку ТОЛЬКО уровень
+#    Error — то есть настоящие дефекты, а не вкусовые замечания.
+#    Порог строгости можно поднять позже: осознанно, по пунктам, отдельным PR.
+#
+# Срабатывание: push в main, pull request в main, ручной запуск (workflow_dispatch).
+
+name: PowerShell Quality
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+# Read-only: CI не нуждается в правках репозитория и токенах
+permissions:
+  contents: read
+
+concurrency:
+  group: ps-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: PowerShell quality gate
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup PowerShell (UTF-8)
+        shell: pwsh
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+          $OutputEncoding = [System.Text.UTF8Encoding]::new()
+          "PowerShell $($PSVersionTable.PSVersion) / PSScriptAnalyzer: $(Get-Module -ListAvailable PSScriptAnalyzer | Select-Object -ExpandProperty Version -First 1)"
+
+      - name: Установить PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+          $OutputEncoding = [System.Text.UTF8Encoding]::new()
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser -AllowClobber -Repository PSGallery
+          Install-Module Pester -Force -Scope CurrentUser -AllowClobber -MinimumVersion 5.5.0 -SkipPublisherCheck -Repository PSGallery
+          Get-Module -ListAvailable PSScriptAnalyzer, Pester | Select-Object Name, Version | Format-Table -AutoSize
+
+      # ------------------------------------------------------------------
+      # 1. Разбираемость всех PowerShell-файлов — блокирующая проверка
+      # ------------------------------------------------------------------
+      - name: Проверка разбора всех .ps1/.psm1
+        shell: pwsh
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+          $OutputEncoding = [System.Text.UTF8Encoding]::new()
+
+          $files = @(Get-ChildItem -Path . -Recurse -File -Include '*.ps1', '*.psm1' |
+            Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]' })
+          "Найдено PowerShell-файлов: $($files.Count)"
+          if ($files.Count -eq 0) { Write-Host 'PowerShell-файлы не найдены — нечего проверять.'; exit 0 }
+
+          $bad = 0
+          foreach ($f in $files) {
+            $tokens = $null; $parseErrors = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile(
+              $f.FullName, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors -and $parseErrors.Count -gt 0) {
+              $bad++
+              Write-Host ("FAIL {0}" -f $f.FullName)
+              foreach ($e in $parseErrors) {
+                Write-Host ("      строка {0}, позиция {1}: {2}" -f $e.Extent.StartLineNumber, $e.Extent.StartColumnNumber, $e.Message)
+              }
+            } else {
+              Write-Host ("OK   {0}" -f $f.FullName)
+            }
+          }
+          Write-Host "`nИтог: $($files.Count - $bad) из $($files.Count) файлов разбираются, с ошибками: $bad"
+          if ($bad -gt 0) {
+            Write-Error "Синтаксические ошибки в $bad PowerShell-файлах — сборка провалена."
+            exit 1
+          }
+
+      # ------------------------------------------------------------------
+      # 2. PSScriptAnalyzer — отчёт + провал только на Error
+      #    (обоснование уровня строгости — в шапке этого файла)
+      # ------------------------------------------------------------------
+      - name: PSScriptAnalyzer — отчёт и шлюз качества
+        shell: pwsh
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+          $OutputEncoding = [System.Text.UTF8Encoding]::new()
+
+          # Правила, противоречащие осознанным договорённостям репозитория:
+          #   PSAvoidUsingWriteHost           — вывод в консоль объявлен в README как штатный;
+          #   PSUseBOMForUnicodeEncodedFile   — проект намеренно хранит файлы в UTF-8 без BOM (pwsh 7).
+          $excluded = @('PSAvoidUsingWriteHost', 'PSUseBOMForUnicodeEncodedFile')
+          Write-Host "Исключённые правила (конфликтуют с соглашениями репозитория): $($excluded -join ', ')"
+
+          $all = @(Invoke-ScriptAnalyzer -Path . -Recurse -ExcludeRule $excluded)
+
+          $errors   = @($all | Where-Object Severity -eq 'Error')
+          $warnings = @($all | Where-Object Severity -eq 'Warning')
+          $info     = @($all | Where-Object Severity -eq 'Information')
+
+          Write-Host "`n=== Сводка PSScriptAnalyzer (без исключённых правил) ==="
+          Write-Host ("Error: {0} | Warning: {1} | Information: {2}" -f $errors.Count, $warnings.Count, $info.Count)
+          if ($all.Count -gt 0) {
+            Write-Host "`n--- По правилам ---"
+            $all | Group-Object RuleName | Sort-Object Count -Descending |
+              ForEach-Object { Write-Host ("{0,4}  {1}" -f $_.Count, $_.Name) }
+            Write-Host "`n--- Подробности ---"
+            foreach ($r in $all) {
+              Write-Host ("[{0}] {1}({2},{3}) {4}" -f $r.Severity, $r.ScriptName, $r.Line, $r.Column, $r.RuleName)
+              Write-Host ("        {0}" -f $r.Message)
+            }
+          } else {
+            Write-Host 'Замечаний нет.'
+          }
+
+          # Полный отчёт (включая исключённые правила) — как вложение, чтобы
+          # видеть реальную картину по репозиторию целиком.
+          New-Item -ItemType Directory -Force -Path ci-report | Out-Null
+          $full = @(Invoke-ScriptAnalyzer -Path . -Recurse)
+          @(
+            "Сгенерировано: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')"
+            "Коммит: $($env:GITHUB_SHA)"
+            "Всего замечаний (включая исключённые правила): $($full.Count)"
+            ""
+            $full | Group-Object RuleName | Sort-Object Count -Descending |
+              ForEach-Object { "{0,4}  {1}" -f $_.Count, $_.Name }
+            ""
+            $full | ForEach-Object { "[{0}] {1}:{2} {3} — {4}" -f $_.Severity, $_.ScriptName, $_.Line, $_.RuleName, $_.Message }
+          ) | Set-Content -Path ci-report/psscriptanalyzer.txt -Encoding utf8
+
+          # Шлюз: валит только Error. Warning-уровень — отчёт, не блокировка.
+          if ($errors.Count -gt 0) {
+            Write-Error ("PSScriptAnalyzer: ошибок уровня Error — {0} (см. отчёт выше и вложение ci-report)." -f $errors.Count)
+            exit 1
+          }
+          Write-Host "`nШлюз пройден: замечаний уровня Error нет. Предупреждения ($($warnings.Count)) — в отчёте, сборку не валят."
+
+      - name: Сохранить отчёт анализатора
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: psscriptanalyzer-report
+          path: ci-report/psscriptanalyzer.txt
+          if-no-files-found: warn
+
+      # ------------------------------------------------------------------
+      # 3. Pester — только если тесты действительно есть
+      # ------------------------------------------------------------------
+      - name: Обнаружить тесты Pester
+        id: detect
+        shell: pwsh
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+          $OutputEncoding = [System.Text.UTF8Encoding]::new()
+
+          $tests = @(Get-ChildItem -Path . -Recurse -File -Include '*.Tests.ps1', '*.Test.ps1' |
+            Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]' })
+          $has = ($tests.Count -gt 0)
+          "has_tests=$($has.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "count=$($tests.Count)"          | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+          if ($has) {
+            Write-Host "Найдено тестов Pester: $($tests.Count)"
+            $tests | ForEach-Object { Write-Host "  $($_.FullName)" }
+          } else {
+            Write-Host 'Тесты Pester (*.Tests.ps1 / *.Test.ps1) в репозитории отсутствуют.'
+            Write-Host 'Шаг выполнения тестов пропускается. Проверка качества обеспечивается'
+            Write-Host 'разбираемостью всех .ps1/.psm1 и анализом PSScriptAnalyzer (см. шапку workflow).'
+          }
+
+      - name: Запустить Pester
+        if: steps.detect.outputs.has_tests == 'true'
+        shell: pwsh
+        run: |
+          chcp 65001 > $null
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+          $OutputEncoding = [System.Text.UTF8Encoding]::new()
+
+          Import-Module Pester -MinimumVersion 5.0.0
+          $config = New-PesterConfiguration
+          $config.Run.Path = '.'
+          $config.Run.PassThru = $true
+          $config.Output.Verbosity = 'Detailed'
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = 'ci-report/pester.xml'
+          $result = Invoke-Pester -Configuration $config
+
+          Write-Host "`nPester: успешно $($result.PassedCount), пропущено $($result.SkippedCount), упало $($result.FailedCount), всего $($result.TotalCount)"
+          if ($result.FailedCount -gt 0) {
+            Write-Error "Pester: упавших тестов — $($result.FailedCount)."
+            exit 1
+          }
+
+      - name: Сохранить результат Pester
+        if: always() && steps.detect.outputs.has_tests == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pester-results
+          path: ci-report/pester.xml
+          if-no-files-found: warn
