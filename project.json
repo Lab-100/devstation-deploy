@@ -8,7 +8,7 @@
     "ref": "main"
   },
   "tools": {
-    "resolve-tools": "0.6.x",
+    "resolve-tools": "0.7.x",
     "backup-util": "0.2.x",
     "doc-extract": "0.3.x",
     "gordon": "0.3.x",
@@ -19,10 +19,10 @@
     "llm-mcp": "0.2.x",
     "opencode-plugins": "0.8.x",
     "opencode-restart": "0.1.x",
-    "opencode-status": "0.4.x",
+    "opencode-status": "0.5.x",
     "opencode-monitor": "0.4.x",
-    "infra-graph": "0.8.x",
-    "mcp-watchdog": "0.4.x",
+    "infra-graph": "0.9.x",
+    "mcp-watchdog": "0.5.x",
     "mcp-watchdog-guardian": "0.2.x",
     "browsertool": "0.1.x"
   },

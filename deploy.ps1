@@ -33,7 +33,7 @@ param(
     [switch]$UpdateRegistry
 )
 $ErrorActionPreference = 'Stop'
-$Script:DeployVersion = '0.3.2'
+$Script:DeployVersion = '0.3.3'
 
 # Рабочий каталог (куда кладутся opencode.json и AGENTS.md) по умолчанию не
 # привязан к конкретной машине: переменная окружения DEVSTATION_WORKSPACE,

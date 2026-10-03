@@ -4,7 +4,7 @@
 # Инсталлер однофайловый, версия не привязана к дистрибутиву.
 # Использование:
 #   pwsh install.ps1                          # последний релиз, иначе ветка main
-#   pwsh install.ps1 -Tag v0.3.2              # конкретный тег
+#   pwsh install.ps1 -Tag v0.3.3              # конкретный тег
 #   pwsh install.ps1 -Ref main                # конкретная ветка
 #   pwsh install.ps1 -SourceZip .\dist.zip    # локальный дистрибутив
 #   pwsh install.ps1 -CheckOnly / -DryRun / -Resume ...   # проброс флагов в deploy.ps1
@@ -75,7 +75,7 @@ if (-not $haveSource) {
     }
     Write-Host "Распаковываю в $dest ..."
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    # codeload отдаёт единый корневой каталог (например devstation-deploy-0.3.2),
+    # codeload отдаёт единый корневой каталог (например devstation-deploy-0.3.3),
     # поэтому разворачиваем во временный каталог и поднимаем содержимое на уровень $dest.
     $stage = Join-Path $env:TEMP "devstation-deploy-stage-$([guid]::NewGuid().ToString('N'))"
     Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force
