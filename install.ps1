@@ -4,9 +4,10 @@
 # Инсталлер однофайловый, версия не привязана к дистрибутиву.
 # Использование:
 #   pwsh install.ps1                          # последний релиз, иначе ветка main
-#   pwsh install.ps1 -Tag v0.3.4              # конкретный тег
+#   pwsh install.ps1 -Tag v0.3.5              # конкретный тег
 #   pwsh install.ps1 -Ref main                # конкретная ветка
-#   pwsh install.ps1 -SourceZip .\dist.zip    # локальный дистрибутив
+#   pwsh install.ps1 -Force                   # принудительно скачать свежий дистрибутив
+#   pwsh install.ps1 -SourceZip .\dist.zip    # локальный дистрибутив (всегда свежий)
 #   pwsh install.ps1 -CheckOnly / -DryRun / -Resume ...   # проброс флагов в deploy.ps1
 # Флаги deploy.ps1 передаются как есть: -PullQwen3, -SetupGitHub, -Owner, -WorkspaceDir, ...
 [CmdletBinding()]
@@ -14,6 +15,7 @@ param(
     [string]$Tag = '',
     [string]$Ref = '',
     [string]$SourceZip = '',
+    [switch]$Force,
     [string]$Repo = 'Lab-100/devstation-deploy',
     [switch]$CheckOnly,
     [switch]$DryRun,
@@ -33,8 +35,32 @@ $ErrorActionPreference = 'Stop'
 $dest = Join-Path $env:LOCALAPPDATA 'devstation-deploy'
 $deploy = Join-Path $dest 'deploy.ps1'
 
+# Загрузка с резервным каналом: встроенный Invoke-WebRequest на этой машине
+# может не пройти перенаправление GitHub на хранилище активов; curl.exe идёт
+# следующим и устраняет проблему без изменения адреса.
+function Invoke-Download {
+    param([string]$Uri, [string]$OutFile)
+    try {
+        Invoke-WebRequest -Uri $Uri -OutFile $OutFile -TimeoutSec 300 -UseBasicParsing
+        return
+    } catch {
+        Write-Host "Встроенная загрузка не сработала ($($_.Exception.Message)); пробую curl.exe ..." -ForegroundColor DarkGray
+    }
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if (-not $curl) { throw "Не удалось скачать ${Uri}: нет рабочего curl.exe" }
+    & $curl.Source -fL --retry 3 --connect-timeout 30 --max-time 300 -o $OutFile $Uri
+    if ($LASTEXITCODE -ne 0) { throw "curl.exe не смог скачать $Uri (код $LASTEXITCODE)" }
+}
+
 # 1. Получение/подготовка дистрибутива
 $haveSource = Test-Path $deploy
+# Без флагов локальная копия переиспользуется (офлайн-режим). Явный -Force или
+# -SourceZip означает, что берём свежий дистрибутив, а не старый кэш.
+if ($haveSource -and ($Force -or $SourceZip)) {
+    Write-Host "Обновляю локальную копию дистрибутива в $dest ..."
+    Remove-Item -LiteralPath $dest -Recurse -Force
+    $haveSource = $false
+}
 if (-not $haveSource) {
     $zip = $SourceZip
     if (-not $zip) {
@@ -63,7 +89,7 @@ if (-not $haveSource) {
         New-Item -ItemType Directory -Force -Path $tmp | Out-Null
         $zip = Join-Path $tmp 'dist.zip'
         try {
-            Invoke-WebRequest -Uri $url -OutFile $zip -TimeoutSec 300 -UseBasicParsing
+            Invoke-Download -Uri $url -OutFile $zip
         } catch {
             Write-Host "Скачивание не удалось ($($_.Exception.Message)). Проверь интернет или укажи -SourceZip." -ForegroundColor Red
             exit 1
@@ -75,7 +101,7 @@ if (-not $haveSource) {
     }
     Write-Host "Распаковываю в $dest ..."
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    # codeload отдаёт единый корневой каталог (например devstation-deploy-0.3.4),
+    # codeload отдаёт единый корневой каталог (например devstation-deploy-0.3.5),
     # поэтому разворачиваем во временный каталог и поднимаем содержимое на уровень $dest.
     $stage = Join-Path $env:TEMP "devstation-deploy-stage-$([guid]::NewGuid().ToString('N'))"
     Expand-Archive -LiteralPath $zip -DestinationPath $stage -Force

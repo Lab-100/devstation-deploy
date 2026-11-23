@@ -35,7 +35,8 @@
 #    gh и авторизация не нужны: используется публичный codeload-архив.
 irm https://github.com/Lab-100/devstation-deploy/releases/latest/download/install.ps1 | iex
 #    или из клона:  pwsh install.ps1 -CheckOnly   (см. install.ps1 -?) /  pwsh install.ps1
-#    конкретная версия/ветка:  pwsh install.ps1 -Tag v0.3.4   /   -Ref main
+#    конкретная версия/ветка:  pwsh install.ps1 -Tag v0.3.5   /   -Ref main
+#    принудительно скачать свежий дистрибутив:  pwsh install.ps1 -Force
 
 # 1. Склонировать:        (git clone <private>/devstation-deploy && cd devstation-deploy)
 cd devstation-deploy
